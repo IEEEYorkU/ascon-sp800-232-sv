@@ -1,0 +1,6 @@
+work/
+transcript
+*.vcd
+*.macro
+*.log
+*.txt
