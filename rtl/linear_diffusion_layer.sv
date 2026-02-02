@@ -1,14 +1,13 @@
 /*
  * Module Name: linear_diffusion_layer
  * Author(s): Artin Kiany, Tirth Patel
- * Description: Applies word-wise diffusion to the 320-bit Ascon state by XORing each 64-bit word with two rotated versions of itself using 
- * fixed rotation constants. This layer spreads bit dependencies within each word and is implemented using only combinational rotations and XORs.
+ * Description: XORs each 64-bit word of the 320-bit state with two rotated versions of itself to provide intra-word bit diffusion using only rotations and XORs.
  * Ref: NIST SP 800-232
  */
 import ascon_pkg::*;
 
 module linear_diffusion_layer(
-	input ascon_state_t state_array_i,
+    input ascon_state_t state_array_i,
 	output ascon_state_t state_array_o
 );
 
@@ -19,9 +18,9 @@ module linear_diffusion_layer(
 	assign s2 = state_array_i[2];
 	assign s3 = state_array_i[3];
 	assign s4 = state_array_i[4];
-	
+
 	logic [63:0] s0_d, s1_d, s2_d, s3_d, s4_d;
-	
+
 	always_comb begin
 		// Rotate-right implemented via logical shifts
 		s0_d = s0 ^ ((s0 >> 19) | (s0 << (WORD_WIDTH - 19))) ^ ((s0 >> 28) | (s0 << (WORD_WIDTH - 28)));
