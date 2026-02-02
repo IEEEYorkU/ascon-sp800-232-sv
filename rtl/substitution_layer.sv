@@ -20,11 +20,11 @@ module substitution_layer (
 
 	genvar j;
 	generate
-		for (j = 0; j < WORD_WIDTH: j++) begin
+		for (j = 0; j < WORD_WIDTH; j++) begin : sbox_loop
 			// Note that concatenation is needed here. As the
 			// input of the Sbox LUT must be a number.
 			assign {state_array_o[0][j], state_array_o[1][j], state_array_o[2][j], state_array_o[3][j], state_array_o[4][j]} = 
-				Sbox({state_array_i[0][j], state_array_i[1][j], state_array_i[2][j], state_array_i[3][j], state_array_i[4][j]});
+				Sbox[{state_array_i[0][j], state_array_i[1][j], state_array_i[2][j], state_array_i[3][j], state_array_i[4][j]}];
 		end
 	endgenerate
 
