@@ -3,7 +3,7 @@
 # =====================
 
 # List of testbenches (example: TESTBENCHES = theta_step_tb rho_step_tb)
-TESTBENCHES =
+TESTBENCHES = tb_linear_diffusion_layer
 
 # --- PATH DEFINITIONS ---
 LIB_DIR     =
