@@ -93,7 +93,7 @@ endtask
              state_array_o[3],
              state_array_o[4]
             );
-      
+
     $display("  EXP: S0=%h S1=%h S2=%h S3=%h S4=%h\n",
              exp[0], exp[1], exp[2], exp[3], exp[4]);
     $fatal(1);
