@@ -9,7 +9,7 @@
  *          3. After that, you can execute make
  */
 
-`timescale 1ns/1ps 
+`timescale 1ns/1ps`timescale 1ns/1ps
 
 import ascon_pkg::*;
 
