@@ -21,7 +21,7 @@ module substitution_layer (
     };
     
     genvar j;
-    generate
+    generate: gen_assign
         for (j = 0; j < WORD_WIDTH; j++) begin : sbox_loop
             // Note that concatenation is needed here. As the
             // input of the Sbox LUT must be a number.
