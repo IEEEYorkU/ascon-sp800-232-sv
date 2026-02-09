@@ -1,6 +1,6 @@
 /*
  * Module Name: substitution_layer_tv.sv
- * Aurthor(s): Kevin Duong, (Add your name here for changes)
+ * Aurthor(s): Kevin Duong, Arthur Sabadini (Add your name here for changes)
  * Description: Testbench for substitution_layer.sv
  *
  * If you are SSH into the EECS server, you don't need to install Modelsim:
@@ -62,9 +62,9 @@ task automatic compute_expected(
     for(int j = 0; j < WORD_WIDTH; j++) begin
         y = sbox_eq(
             in_state[0][j], 
-            in_state[1][j], 
-            in_state[2][j], 
-            in_state[3][j], 
+            in_state[1][j],
+            in_state[2][j],
+            in_state[3][j],
             in_state[4][j]
         );
         exp_state[0][j] = y[4];
@@ -79,9 +79,21 @@ endtask
   task automatic fail_mismatch(input int test_id, input ascon_state_t exp);
     $display("\n[FAIL] test_id=%0d", test_id);
     $display("  IN : S0=%h S1=%h S2=%h S3=%h S4=%h",
-             state_array_i[0], state_array_i[1], state_array_i[2], state_array_i[3], state_array_i[4]);
+             state_array_i[0],
+             state_array_i[1],
+             state_array_i[2],
+             state_array_i[3],
+             state_array_i[4]
+            );
+      
     $display("  DUT: S0=%h S1=%h S2=%h S3=%h S4=%h",
-             state_array_o[0], state_array_o[1], state_array_o[2], state_array_o[3], state_array_o[4]);
+             state_array_o[0],
+             state_array_o[1],
+             state_array_o[2],
+             state_array_o[3],
+             state_array_o[4]
+            );
+      
     $display("  EXP: S0=%h S1=%h S2=%h S3=%h S4=%h\n",
              exp[0], exp[1], exp[2], exp[3], exp[4]);
     $fatal(1);
