@@ -36,7 +36,7 @@ substitution_layer dut (
 //This is meant to be the expected output, we can use to compare
 //the results from sbox_eq function to our actual implementation substitution_layer.sv
 function automatic logic [4:0] sbox_eq(
-    input logic x0, x1, x2, x3, x4
+    input logic x0, input logic x1, input logic x2, input logic x3, input logic x4
 );
 
  logic y0, y1, y2, y3, y4;
@@ -50,7 +50,7 @@ function automatic logic [4:0] sbox_eq(
     //Return the outputs
     sbox_eq = {y0, y1, y2, y3, y4};
  end
-endfunction 
+endfunction
 
 //Compute full-state expected output using sbox_eq function
 task automatic compute_expected(
@@ -61,7 +61,7 @@ task automatic compute_expected(
     logic [4:0] y;
     for(int j = 0; j < WORD_WIDTH; j++) begin
         y = sbox_eq(
-            in_state[0][j], 
+            in_state[0][j],
             in_state[1][j],
             in_state[2][j],
             in_state[3][j],
