@@ -19,7 +19,7 @@ module substitution_layer (
         5'h1e, 5'h13, 5'h7, 5'he, 5'h0, 5'hd, 5'h11, 5'h18,
         5'h10, 5'hc, 5'h1, 5'h19, 5'h16, 5'ha, 5'hf, 5'h17
     };
-    
+
     genvar j;
     generate: gen_assign
         for (j = 0; j < WORD_WIDTH; j++) begin : sbox_loop
