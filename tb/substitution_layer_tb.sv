@@ -85,7 +85,7 @@ endtask
              state_array_i[3],
              state_array_i[4]
             );
-      
+
     $display("  DUT: S0=%h S1=%h S2=%h S3=%h S4=%h",
              state_array_o[0],
              state_array_o[1],
