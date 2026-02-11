@@ -23,6 +23,9 @@ module substitution_layer (
         5'h10, 5'hc, 5'h1, 5'h19, 5'h16, 5'ha, 5'hf, 5'h17
     };
 
+    // ----------------------------------------------------------------------
+    // Parallel S-box Application
+    // ----------------------------------------------------------------------
     genvar j;
     generate
         for (j = 0; j < WORD_WIDTH; j++) begin : gen_sbox_loop
