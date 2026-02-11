@@ -1,6 +1,6 @@
 /*
  * Module Name: substitution_layer_tv.sv
- * Aurthor(s): Kevin Duong, Arthur Sabadini (Add your name here for changes)
+ * Aurthor(s): Kevin Duong, Arthur Sabadini
  * Description: Testbench for substitution_layer.sv
  *
  * If you are SSH into the EECS server, you don't need to install Modelsim:
