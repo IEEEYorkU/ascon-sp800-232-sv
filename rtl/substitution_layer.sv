@@ -12,7 +12,10 @@ module substitution_layer (
     output  ascon_state_t   state_array_o
 );
 
-    // Sbox LUT. See NIST SP 800-232 Section 3.3 Table 6
+    // ----------------------------------------------------------------------
+    // S-box Look-Up Table (LUT)
+    // ----------------------------------------------------------------------
+    // See NIST SP 800-232 Section 3.3 Table 6
     localparam logic [NUM_WORDS-1:0] Sbox [32] = '{
         5'h4, 5'hb, 5'h1f, 5'h14, 5'h1a, 5'h15, 5'h9, 5'h2,
         5'h1b, 5'h5, 5'h8, 5'h12, 5'h1d, 5'h3, 5'h6, 5'h1c,
