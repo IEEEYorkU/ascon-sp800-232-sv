@@ -3,7 +3,7 @@
 # =====================
 
 # List of testbenches (example: TESTBENCHES = theta_step_tb rho_step_tb)
-TESTBENCHES =
+TESTBENCHES = substitution_layer_tb
 
 # --- PATH DEFINITIONS ---
 LIB_DIR     =
