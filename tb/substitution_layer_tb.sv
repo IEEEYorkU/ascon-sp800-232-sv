@@ -3,10 +3,6 @@
  * Aurthor(s): Kevin Duong, Arthur Sabadini
  * Description: Testbench for substitution_layer.sv
  *
- * If you are SSH into the EECS server, you don't need to install Modelsim:
- *          1. Open terminal and type bash
- *          2. Once, you're in bash, execute source env.sh
- *          3. After that, you can execute make
  */
 
 `timescale 1ns/1ps`timescale 1ns/1ps
