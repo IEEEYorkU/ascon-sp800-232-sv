@@ -1,6 +1,6 @@
 /*
  * Module Name: substitution_layer
- * Author(s): Arthur Sabadini, Kevin Duong (add your name as you make changes)
+ * Author(s): Arthur Sabadini, Kevin Duong
  * Description: The substitution layer applies a 5-bit nonlinear S-box in bit-sliced form across the entire state.
  * Ref: NIST SP 800-232
  */
