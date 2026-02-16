@@ -13,7 +13,7 @@ module ascon_core (
 
     // Permutation Control
     input   logic           start_perm_i,
-    input   logic           mode_i,
+    input   logic           round_config_i,
 
     // Read/Write Word Address
     input   logic [2:0]     word_sel_i,
@@ -27,7 +27,7 @@ module ascon_core (
     output  ascon_word_t    data_o,
 
     // Permutation Complete
-    output  logic           perm_done_o
+    output  logic           ready_o
 );
 
 endmodule
