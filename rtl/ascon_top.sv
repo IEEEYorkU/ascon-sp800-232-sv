@@ -7,7 +7,7 @@
  *
  * Architecture Overview:
  * This design employs a "Decoupled Data/Control" strategy, strictly dividing
- * the cryptographic mathematics and bit-level formatting from the protocol-specific 
+ * the cryptographic mathematics and bit-level formatting from the protocol-specific
  * state machines:
  *
  * 1. The "Pure" Ascon Core (The Muscle): A centralized, protocol-agnostic
@@ -22,22 +22,22 @@
  *
  * 3. Dedicated Sub-FSMs (The Brains): Protocol-specific controllers
  * (e.g., aead_fsm, hash_fsm) that manage AXI-Stream handshaking,
- * domain separation, and permutation scheduling. They operate strictly as 
+ * domain separation, and permutation scheduling. They operate strictly as
  * control-path orchestrators, unburdened by byte-level padding logic.
  *
  * 4. Top-Level Arbiter (This Module): Acts as a traffic director. Based
- * on the selected operating mode (mode_i), it multiplexes the core control 
+ * on the selected operating mode (mode_i), it multiplexes the core control
  * signals and AXI handshakes between the active Sub-FSM and the hardware.
  *
  * Datapath Logistics:
- * - INPUT: The raw `s_axis_tdata` is pre-processed by the padder. The formatted 
- * `padded_tdata` is routed directly to the Core or top-level XOR via a mux, 
+ * - INPUT: The raw `s_axis_tdata` is pre-processed by the padder. The formatted
+ * `padded_tdata` is routed directly to the Core or top-level XOR via a mux,
  * keeping the high-speed data completely out of the FSMs.
- * - OUTPUT (Hash/XOF): During the squeeze phase, the Core's state output 
- * (`core_data_o`) flows directly to the top-level AXI master (`m_axis_tdata`), 
+ * - OUTPUT (Hash/XOF): During the squeeze phase, the Core's state output
+ * (`core_data_o`) flows directly to the top-level AXI master (`m_axis_tdata`),
  * entirely bypassing the Hash FSM.
- * - OUTPUT (AEAD): The AEAD FSM and top-level XOR module tap into `core_data_o` 
- * to externally compute Plaintext (resolving the decryption state-update 
+ * - OUTPUT (AEAD): The AEAD FSM and top-level XOR module tap into `core_data_o`
+ * to externally compute Plaintext (resolving the decryption state-update
  * conflict) and verify the 128-bit MAC Tag.
  *
  * Interface Notes (Phase 1 Development):
@@ -110,7 +110,6 @@ module ascon_top #(
     logic           core_xor_en_i;
     ascon_word_t    core_data_o;
     logic           core_ready_o;
-    logic [1:0]     core_in_data_sel;
 
     // --- Arbiter Muxing FSM Logic ---
     // We define internal wires coming OUT of the sub-FSMs
