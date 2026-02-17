@@ -1,9 +1,15 @@
 /*
  * Module Name: ascon_core
+<<<<<<< HEAD
  * Author(s): Kiet Le, Arthur Sabadini
  * Description: Applies the Ascon Permutation for a configurable number of
  * rounds.
  * Ref: NISP ST 800-232 Section 3.
+=======
+ * Author(s): Kiet Le
+ * Description:
+ *
+>>>>>>> c1ec50b (ASCON_CORE: Establish ascon core interface I/O (#8))
  */
 
 import ascon_pkg::*;
@@ -31,6 +37,7 @@ module ascon_core (
     output  logic           ready_o
 );
 
+<<<<<<< HEAD
     // FSM States
     typedef enum logic [1:0] {
 		STATE_IDLE,
@@ -150,3 +157,6 @@ module ascon_core (
 
 endmodule
 
+=======
+endmodule
+>>>>>>> c1ec50b (ASCON_CORE: Establish ascon core interface I/O (#8))
