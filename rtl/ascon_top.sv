@@ -306,6 +306,7 @@ module ascon_top #(
         .m_axis_tready_i        (m_axis_tready)       // Direct from top-level
     );
 
+    // --- XOR Unit ---
     xor64 u_xor64 (
         .op1_i  (xor_op1),
         .op2_i  (xor_op2),
