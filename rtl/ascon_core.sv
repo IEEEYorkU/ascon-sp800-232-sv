@@ -39,7 +39,7 @@ module ascon_core (
     } state_t;
     state_t state = STATE_IDLE, next_state;
 	
-	logic [3:0] rnd_cnt;
+	rnd_t rnd_cnt;
 	ascon_state_t state_array = 320'd0;
 	
 	// Permutation Layers Output
@@ -47,16 +47,16 @@ module ascon_core (
 	
 	// Permutation Layers Instances
 	constant_addition_layer const_add(
-        .rnd_i(rnd_cnt), 
-        .state_array_i(state_array), 
+        .rnd_i(rnd_cnt),
+        .state_array_i(state_array),
         .state_array_o(addition_state_array_o)
     );
 	substitution_layer substitution(
-        .state_array_i(addition_state_array_o), 
+        .state_array_i(addition_state_array_o),
         .state_array_o(substitution_state_array_o)
     );
 	linear_diffusion_layer diffusion(
-        .state_array_i(substitution_state_array_o), 
+        .state_array_i(substitution_state_array_o),
         .state_array_o(diffusion_state_array_o)
     );
 	
@@ -90,7 +90,7 @@ module ascon_core (
             
             STATE_PERM: begin
                 if(rnd_cnt > 0) begin
-                    next_state = STATE_PERM; 
+                    next_state = STATE_PERM;
                 end else begin
                     next_state = STATE_IDLE;
                 end
@@ -119,7 +119,7 @@ module ascon_core (
             state_array <= 320'd0;
         end else begin
             case (state)
-                STATE_IDLE: begin						
+                STATE_IDLE: begin
                     if(write_en_i) begin
                         if(xor_en_i) begin
                             state_array[word_sel_i] <= data_i ^ state_array[word_sel_i];
@@ -140,8 +140,8 @@ module ascon_core (
 
                 STATE_PERM: begin
                     state_array <= diffusion_state_array_o;
-                    if(rnd_cnt > 0) 
-                        // Preventing rnd_cnt from wrapping-around. 
+                    if(rnd_cnt > 0)
+                        // Preventing rnd_cnt from wrapping-around.
                         rnd_cnt <= rnd_cnt - 4'd1;
                 end
             endcase
