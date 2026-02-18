@@ -1,7 +1,9 @@
 /*
  * Module Name: constant_addition_layer
- * Author(s): Sasha Calmels
- * Description:
+ * Author(s): Sasha Calmels, Kiet Le
+ * Description: Implements the p_c (Constant Addition) layer of the Ascon
+ *              permutation. It XORs a round-dependent 8-bit constant into the
+ *              64-bit word x2 of the Ascon state to ensure round asymmetry.
  * Ref: NIST SP 800-232
  */
 
