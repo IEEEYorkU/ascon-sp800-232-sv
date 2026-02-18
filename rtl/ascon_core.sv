@@ -149,7 +149,3 @@ module ascon_core (
     end
 
 endmodule
-
-=======
-endmodule
->>>>>>> c1ec50b (ASCON_CORE: Establish ascon core interface I/O (#8))
