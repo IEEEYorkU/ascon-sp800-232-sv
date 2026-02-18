@@ -14,7 +14,7 @@ module constant_addition_layer (
 );
 
     // 16-entry LUT, each entry is 8 bit round constant
-    localparam logic [7:0] ASCON_RC_LUT [0:15] = '{
+    localparam logic [7:0] ASCON_RC_LUT [16] = '{
         8'h3c, // i=0
         8'h2d, // i=1
         8'h1e, // i=2

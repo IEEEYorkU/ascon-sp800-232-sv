@@ -15,7 +15,7 @@ module constant_addition_layer_tb;
     ascon_state_t state_array_i;
     ascon_state_t state_array_o;
     rnd_t rnd_i;
-    
+
     // Test signals
     ascon_state_t test_array_i;
     rnd_t test_rnd_i;
@@ -26,8 +26,8 @@ module constant_addition_layer_tb;
         .state_array_o(state_array_o)
     );
 
-    /* 
-     * Checks that the s0 = x1, s1 = x1, s3 = x3 and s4 = x4 
+    /*
+     * Checks that the s0 = x1, s1 = x1, s3 = x3 and s4 = x4
      * In other words, that these registers remainded unchanged from the input.
      * As per ascon blah blah blah
      */
@@ -39,11 +39,11 @@ module constant_addition_layer_tb;
         assert(
             dut_out[0] == exp[0] &
             dut_out[1] == exp[1] &
-            dut_out[3] == exp[3] &                
+            dut_out[3] == exp[3] &
             dut_out[4] == exp[4]
-        ) 
+        )
             $display("OK. x0, x1, x3, x4 unchanged for Round: %d", rnd);
-        else 
+        else
             $error("Failed. Problem with x0, x1, x3, or x4 for Round: %d", rnd);
     endtask
 
@@ -57,7 +57,7 @@ module constant_addition_layer_tb;
     );
         assert(
             dut_out[2] == (exp[2] ^ dut.ASCON_RC_LUT[rnd])
-        ) 
+        )
             $display("OK. s2 = expected s2");
         else
             $error("Failed. Problem with s2.");
@@ -76,7 +76,7 @@ module constant_addition_layer_tb;
     endtask
 
     // Create clock
-    logic clk;  
+    logic clk;
     // Set up clock
     initial clk = 0;
     always #1 clk = ~clk;
@@ -97,7 +97,7 @@ module constant_addition_layer_tb;
             check_unchanged(test_rnd_i, test_array_i, state_array_o);
             check_output(test_rnd_i, test_array_i, state_array_o);
         end
-        
+
         #1;
 
         // Test 2 Exhaustive Cases
