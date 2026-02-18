@@ -56,7 +56,7 @@ module constant_addition_layer_tb;
         input ascon_state_t dut_out
     );
         assert(
-            dut_out[2] == (exp[2] ^ dut.ASCON_RC_LUT[rnd])
+            dut_out[2] == (exp[2] ^ dut.AsconRcLut[rnd])
         )
             $display("OK. s2 = expected s2");
         else

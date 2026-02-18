@@ -14,7 +14,7 @@ module constant_addition_layer (
 );
 
     // 16-entry LUT, each entry is 8 bit round constant
-    localparam logic [7:0] ASCON_RC_LUT [16] = '{
+    localparam logic [7:0] AsconRcLut [16] = '{
         8'h3c, // i=0
         8'h2d, // i=1
         8'h1e, // i=2
@@ -36,7 +36,7 @@ module constant_addition_layer (
     always_comb begin
         state_array_o = state_array_i;
 
-        state_array_o[2] = state_array_i[2] ^ ASCON_RC_LUT[rnd_i];
+        state_array_o[2] = state_array_i[2] ^ AsconRcLut[rnd_i];
     end
 
 endmodule
