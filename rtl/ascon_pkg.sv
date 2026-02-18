@@ -24,6 +24,9 @@ package ascon_pkg;
     // Defined as [4:0] so index 0 maps to S0 (IV), index 4 maps to S4
     typedef ascon_word_t [NUM_WORDS-1:0] ascon_state_t;
 
+    // Round constant type
+    typedef logic [3:0] rnd_t;
+
     // 4-bit TUSER encoding for AXI4-Stream
     typedef enum logic [3:0] {
         TUSER_RESERVED = 4'b0000,
