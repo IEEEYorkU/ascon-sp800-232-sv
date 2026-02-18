@@ -8,7 +8,7 @@
 `timescale 1ns/1ps
 import ascon_pkg::*;
 
-module module linear_diffusion_layer_tb;
+module linear_diffusion_layer_tb;
 
     // DUT signals
     ascon_state_t state_i;
