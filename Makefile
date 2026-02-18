@@ -3,8 +3,7 @@
 # =====================
 
 # List of testbenches (example: TESTBENCHES = theta_step_tb rho_step_tb)
-TESTBENCHES = substitution_layer_tb constant_addition_layer_tb
-TESTBENCHES = tb_linear_diffusion_layer
+TESTBENCHES = substitution_layer_tb constant_addition_layer_tb linear_diffusion_layer_tb
 
 # --- PATH DEFINITIONS ---
 LIB_DIR     =

@@ -1,3 +1,10 @@
+/*
+ * Module Name: linear_diffusion_layer_tb
+ * Author(s): Tirth Patel, Artin Kiany
+ * Description: Test bench for linear_diffusion_layer.sv
+ * Ref: NIST SP 800-232
+ */
+
 `timescale 1ns/1ps
 import ascon_pkg::*;
 
