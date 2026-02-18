@@ -7,7 +7,7 @@
  * squeeze digests, supporting continuous squeeze mode via the abort_i signal.
  */
 
-\`timescale 1ns / 1ps
+`timescale 1ns / 1ps
 import ascon_pkg::*;
 
 module hash_fsm (
