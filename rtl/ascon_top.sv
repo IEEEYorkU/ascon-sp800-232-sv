@@ -110,6 +110,7 @@ module ascon_top #(
     logic           core_xor_en_i;
     ascon_word_t    core_data_o;
     logic           core_ready_o;
+    logic [1:0]     core_in_data_sel;
 
     // --- Arbiter Muxing FSM Logic ---
     // We define internal wires coming OUT of the sub-FSMs
