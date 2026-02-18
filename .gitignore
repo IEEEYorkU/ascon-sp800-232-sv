@@ -4,3 +4,13 @@ transcript
 *.macro
 *.log
 *.txt
+
+#MacOS Metadata
+.DS_Store
+.DS_Store?
+._*
+obj_dir/
+
+#Verilator Files
+tb_main_verilator.cpp
+tb_main.make

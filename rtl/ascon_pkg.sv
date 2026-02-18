@@ -24,4 +24,7 @@ package ascon_pkg;
     // Defined as [4:0] so index 0 maps to S0 (IV), index 4 maps to S4
     typedef ascon_word_t [NUM_WORDS-1:0] ascon_state_t;
 
+    // Round constant type
+    typedef logic [3:0] rnd_t;
+
 endpackage : ascon_pkg
