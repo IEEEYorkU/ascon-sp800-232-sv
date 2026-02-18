@@ -7,77 +7,115 @@ module tb_linear_diffusion_layer;
     ascon_state_t state_i;
     ascon_state_t state_o;
 
-    // Reference full 320-bit values
-    logic [319:0] input_vec;
-    logic [319:0] expected_vec;
-
-    // DUT
+    // DUT Instantiation
     linear_diffusion_layer dut (
         .state_array_i(state_i),
         .state_array_o(state_o)
     );
 
-    initial begin
-        $display("=== Starting Linear Diffusion Layer Testbench ===");
+    ascon_state_t exp;
+    int test_id;
+    int num_random_tests;
+    logic mismatch;
 
-        // ------------------------
-        // test case 1: All zeros
-        // ------------------------
+    // reference model: Right Circular Rotation (ROR). The corrcet behaviour of the Layer
+
+    function automatic logic [63:0] ror64(input logic [63:0] data, input int shift);
+        return (data >> shift) | (data << (64 - shift));
+    endfunction
+
+    // Compute expected output using the Ascon Sigma functions
+    task automatic compute_expected(
+        input  ascon_state_t in_state,
+        output ascon_state_t exp_state
+    );
+        int r_a [0:4]; //rotation a
+        int r_b [0:4]; //rotation b
         
-        state_i[0] = 64'h0;
-        state_i[1] = 64'h0;
-        state_i[2] = 64'h0;
-        state_i[3] = 64'h0;
-        state_i[4] = 64'h0;
+        r_a[0] = 19; r_a[1] = 61; r_a[2] = 1; r_a[3] = 10; r_a[4] = 7;  // word rotation 1 from ascon pdf
+        r_b[0] = 28; r_b[1] = 39; r_b[2] = 6; r_b[3] = 17; r_b[4] = 41; // word rotation 2 from ascon pdf
+
+        for (int i = 0; i < 5; i++) begin
+            exp_state[i] = in_state[i] ^ ror64(in_state[i], r_a[i]) ^ ror64(in_state[i], r_b[i]);
+        end
+    endtask
+
+    // print mismatch
+
+    task automatic fail_mismatch(input int tid, input ascon_state_t expected_val);
+        $display("\n[FAIL] test_id=%0d", tid);
+        for (int i = 0; i < 5; i++) begin
+            $display("  Word %0d | IN: %h | DUT: %h | EXP: %h", 
+                     i, state_i[i], state_o[i], expected_val[i]);
+        end
+        $finish;
+    endtask
+
+    // helper: generate random 64-bit word
+
+    function automatic logic [63:0] rand_word();
+        return { $urandom(), $urandom() };
+    endfunction
+
+    // main tests
+
+    initial begin
+
+        test_id = 0;
+        num_random_tests = 500;
+        mismatch = 0;
+
+        $display("Starting Linear Diffusion Layer Testbench");
+
+        // Test 1: All zeros
+
+        for (int i = 0; i < 5; i++) state_i[i] = 64'h0;
 
         #1;
 
-        $display("Full State: Success (320 of all zeros indeed wohoo)");
+        compute_expected(state_i, exp);
+        
+        mismatch = 0;
+        for (int i = 0; i < 5; i++) if (state_o[i] !== exp[i]) mismatch = 1;
+        
+        if (mismatch) fail_mismatch(test_id, exp);
+        $display("Test 1: All Zeros PASSED wohoo.");
+        test_id++;
 
-        if({state_o[0], state_o[1], state_o[2], state_o[3], state_o[4]} !== 320'h0) begin 
-            $error("Test 1 failed womp womp");
+        // Test 2: 1 in 1st bit for all words
+
+        for (int i = 0; i < 5; i++) begin
+            for (int w = 0; w < 5; w++) state_i[w] = 64'h0;
+            state_i[i] = 64'h1; 
+            #1;
+            compute_expected(state_i, exp);
+            
+            mismatch = 0;
+            for (int k = 0; k < 5; k++) if (state_o[k] !== exp[k]) mismatch = 1;
+            
+            if (mismatch) fail_mismatch(test_id, exp);
+            $display("Test 2: Word %0d Bit 1 Test Passed wohoo.", i);
+            test_id++;
         end
 
-        // -------------------------
-        // test case 2: Word 0 - Rotation 19 & 28 
-        // -------------------------
-        // Input: 64'h0000|0000|0000|0001
-        // Math:
-        //      Orginial: 0000|0000|0000|0001
-        //      Rot 19:   0000|2000|0000|0000 (Bit 0 moved to 45: 2^45)
-        //      Rot 28:   0000|0010|0000|0000 (Bit 0 moved to 36: 2^36)
-        // XOR Result:    0000|2010|0000|0001
+        // Test 3: randomised bit test
 
-        state_i[0] = 64'h1;
+        $display("Starting %0d Random Regressions...", num_random_tests);
 
-        #1;
+        for (int t = 0; t < num_random_tests; t++) begin
+            for (int r = 0; r < 5; r++) state_i[r] = rand_word();
+            
+            #1;
+            compute_expected(state_i, exp);
 
-        if(state_o[0] === 64'h0000201000000001) begin
-            $display("Word 0: Success (Rot 19 and 28 match wohoo)");
-        end else begin
-            $display("Word 0: Fail womp womp. Got %h", state_o[0]);
+            mismatch = 0;
+            for (int k = 0; k < 5; k++) if (state_o[k] !== exp[k]) mismatch = 1;
+
+            if (mismatch) fail_mismatch(test_id, exp);
+            test_id++;
         end
 
-        // -------------------------
-        // test case 3: Word 2 - Rotation 1 & 6
-        // -------------------------
-        // Input: 64'h0000|0000|0000|0001
-        // Math:
-        //      Orginial: 0000|0000|0000|0001
-        //      Rot 19:   8000|0000|0000|0000 (Bit 0 wraps to Bit 63)
-        //      Rot 28:   0400|0000|0000|0000 (Bit 0 wraps to Bit 58)
-        // XOR Result:    8400|0000|0000|0001
-
-        state_i[2] = 64'h1;
-
-        #1;
-
-        if(state_o[2] === 64'h8400000000000001) begin
-            $display("Word 2: Success (Rot 1 and 6 match wohoo)");
-        end else begin
-            $display("Word 2: fail womp womp. Got %h", state_o[2]);
-        end
-
+        $display("\nALL TESTS PASSED SUCCESSFULLY wohoo!");
         $finish;
     end
 
