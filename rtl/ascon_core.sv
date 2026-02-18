@@ -19,7 +19,7 @@ module ascon_core (
     // Read/Write Word Address
     input   logic [2:0]     word_sel_i,
 
-    // Data I/O Control
+    // Data I/SO Control
     input   ascon_word_t    data_i,
     input   logic           write_en_i,
     input   logic           xor_en_i,
