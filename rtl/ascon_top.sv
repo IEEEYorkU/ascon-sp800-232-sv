@@ -189,6 +189,7 @@ module ascon_top #(
 
     // The Top Level Mux directly feeds the Core based on the Mode
     always_comb begin
+        // AEAD Functions
         if (mode_i == MODE_AEAD_ENC || mode_i == MODE_AEAD_DEC) begin
             // Core Control Muxing
             core_start_perm_i   = aead_start_perm;
@@ -206,6 +207,8 @@ module ascon_top #(
             m_axis_tlast        = aead_m_axis_tlast;
             m_axis_tuser        = aead_m_axis_tuser;
             m_axis_tkeep        = aead_m_axis_tkeep;
+
+        // HASH/XOF Functions
         end else begin
             // Core Control Muxing
             core_start_perm_i   = hash_start_perm;
@@ -287,7 +290,6 @@ module ascon_top #(
         .word_sel_o             (hash_word_sel),
         .data_o                 (hash_data_o),       // Used to write the pre-computed Hash IVs into the core
         .write_en_o             (hash_write_en),
-        .xor_en_o               (hash_xor_en),       // RESTORED: Needed for S0 ^ M_i absorption
         .core_in_data_sel_o     (hash_in_data_sel),
         .xor_sel_o              (hash_xor_sel)
 
