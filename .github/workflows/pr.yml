@@ -87,7 +87,7 @@ jobs:
         # read_verilog -sv = read SystemVerilog
         # synth = try to synthesize generic gates
         run: |
-          yosys -p "read_verilog -sv rtl/substitution_layer.sv; synth"
+          yosys -p "read_verilog -sv rtl/ascon_pkg.sv rtl/substitution_layer.sv; synth"
 
   # --- 3. Linter ---
   lint:
