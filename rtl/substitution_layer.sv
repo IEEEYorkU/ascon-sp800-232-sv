@@ -6,12 +6,12 @@
  * Ref: NIST SP 800-232
  */
 
-module substitution_layer (
-    input   ascon_pkg::ascon_state_t   state_array_i,
-    output  ascon_pkg::ascon_state_t   state_array_o
-);
+import ascon_pkg::*;
 
-    import ascon_pkg::*;
+module substitution_layer (
+    input   ascon_state_t   state_array_i,
+    output  ascon_state_t   state_array_o
+);
 
     // ----------------------------------------------------------------------
     // S-box Look-Up Table (LUT)
