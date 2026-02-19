@@ -51,4 +51,8 @@ module ascon_core_tb;
         .ready_o(ready_o)
     );
 
+    // Test note: DUT Permutation instances will have the correct values 
+    // as soon as rnd_cnt = 0. On the next clk cycle the values will change,
+    // as data_o will be updated.
+
 endmodule
