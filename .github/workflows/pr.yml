@@ -67,6 +67,29 @@ jobs:
           source env.sh
           make
 
+  verilator-build:
+    runs-on: ubuntu-latest
+    # This line runs all steps inside a container with the latest Verilator pre-installed
+    container: verilator/verilator:latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Make and G++
+        # The container is minimal, so we ensure we have build tools
+        run: |
+          apt-get update && apt-get install -y make g++ git
+
+      - name: Verify Version
+        run: verilator --version
+
+      - name: Run Verilator Simulation
+        # We pass a specific flag to your makefile to tell it to use Verilator
+        run: make run_all SIM=verilator
+
   lint:
     runs-on: ubuntu-latest
     permissions:
