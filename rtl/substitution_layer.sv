@@ -56,29 +56,42 @@ module substitution_layer (
     // Parallel S-box Application
     // ----------------------------------------------------------------------
     always_comb begin
-        // By using a procedural block instead of 'generate/assign',
-        // Yosys can safely unroll the array indexing without crashing.
         logic [4:0] slice_in;
         logic [4:0] slice_out;
 
-        for (integer j = 0; j < ascon_pkg::WORD_WIDTH; j = j + 1) begin
-            // 1. Pack the 5 bits from the state into a single vector
-            slice_in[4] = state_array_i[0][j];
-            slice_in[3] = state_array_i[1][j];
-            slice_in[2] = state_array_i[2][j];
-            slice_in[1] = state_array_i[3][j];
-            slice_in[0] = state_array_i[4][j];
+        // 1. Flatten the 2D packed arrays into 1D vectors to avoid Yosys AST crashes
+        logic [ascon_pkg::WORD_WIDTH-1:0] s0_in, s1_in, s2_in, s3_in, s4_in;
+        logic [ascon_pkg::WORD_WIDTH-1:0] s0_out, s1_out, s2_out, s3_out, s4_out;
 
-            // 2. Pass it through the S-box function
+        s0_in = state_array_i[0];
+        s1_in = state_array_i[1];
+        s2_in = state_array_i[2];
+        s3_in = state_array_i[3];
+        s4_in = state_array_i[4];
+
+        // 2. Loop over the 1D vectors (Yosys handles this perfectly)
+        for (integer j = 0; j < ascon_pkg::WORD_WIDTH; j = j + 1) begin
+            slice_in[4] = s0_in[j];
+            slice_in[3] = s1_in[j];
+            slice_in[2] = s2_in[j];
+            slice_in[1] = s3_in[j];
+            slice_in[0] = s4_in[j];
+
             slice_out = apply_sbox(slice_in);
 
-            // 3. Unpack the vector back into the output state array bit-by-bit
-            state_array_o[0][j] = slice_out[4];
-            state_array_o[1][j] = slice_out[3];
-            state_array_o[2][j] = slice_out[2];
-            state_array_o[3][j] = slice_out[1];
-            state_array_o[4][j] = slice_out[0];
+            s0_out[j] = slice_out[4];
+            s1_out[j] = slice_out[3];
+            s2_out[j] = slice_out[2];
+            s3_out[j] = slice_out[1];
+            s4_out[j] = slice_out[0];
         end
+
+        // 3. Pack the 1D vectors back into the 2D output array
+        state_array_o[0] = s0_out;
+        state_array_o[1] = s1_out;
+        state_array_o[2] = s2_out;
+        state_array_o[3] = s3_out;
+        state_array_o[4] = s4_out;
     end
 
 endmodule
