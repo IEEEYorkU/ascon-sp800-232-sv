@@ -201,7 +201,7 @@ module ascon_top #(
             xor_in_op2_sel      = aead_xor_sel;
 
             // AXI Stream Handshake Muxing
-            s_axis_tready       = aead_s_axis_tready;
+            padded_tready       = aead_s_axis_tready;
             m_axis_tdata        = aead_m_axis_tdata;
             m_axis_tvalid       = aead_m_axis_tvalid;
             m_axis_tlast        = aead_m_axis_tlast;
@@ -220,7 +220,7 @@ module ascon_top #(
             xor_in_op2_sel      = hash_xor_sel;
 
             // AXI Stream Handshake Muxing
-            s_axis_tready       = hash_s_axis_tready;
+            padded_tready       = hash_s_axis_tready;
             m_axis_tdata        = hash_m_axis_tdata;
             m_axis_tvalid       = hash_m_axis_tvalid;
             m_axis_tlast        = hash_m_axis_tlast;
@@ -249,7 +249,6 @@ module ascon_top #(
     //     .word_sel_o     (aead_word_sel),
     //     .data_o         (aead_data_o),
     //     .write_en_o     (aead_write_en),
-    //     // .xor_en_o       (aead_xor_en),
     //     .in_data_sel_o  (aead_in_data_sel),
     //     .core_data_i    (core_data_o),       // Read state from core for Decryption/Tag
 
@@ -294,7 +293,6 @@ module ascon_top #(
         .xor_sel_o              (hash_xor_sel)
 
         // --- Padded AXI4-Stream Slave (Data coming FROM the Padder) ---
-        // Notice: tdata and tkeep are gone. The padder handles them!
         .padded_tuser_i         (padded_tuser),     // Tells FSM if it's Message (M) or Custom String (Z)
         .padded_tlast_i         (padded_tlast),     // Trigger to run the permutation!
         .padded_tvalid_i        (padded_tvalid),
@@ -313,7 +311,7 @@ module ascon_top #(
         .op1_i  (xor_op1),
         .op2_i  (xor_op2),
         .res_o  (xor_res)
-    )
+    );
     assign xor_op1 = core_data_o;
     always_comb begin
         case(xor_in_op2_sel)
