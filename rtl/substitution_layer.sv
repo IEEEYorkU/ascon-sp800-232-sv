@@ -56,12 +56,12 @@ module substitution_layer (
     // Parallel S-box Application
     // ----------------------------------------------------------------------
     always_comb begin
-        // By using a procedural block instead of 'generate/assign', 
+        // By using a procedural block instead of 'generate/assign',
         // Yosys can safely unroll the array indexing without crashing.
         logic [4:0] slice_in;
         logic [4:0] slice_out;
 
-        for (integer j = 0; j < WORD_WIDTH; j = j + 1) begin
+        for (integer j = 0; j < ascon_pkg::WORD_WIDTH; j = j + 1) begin
             // 1. Pack the 5 bits from the state into a single vector
             slice_in[4] = state_array_i[0][j];
             slice_in[3] = state_array_i[1][j];
