@@ -171,20 +171,20 @@ module ascon_top #(
         .mode_i         (mode_i),
 
         // Raw Input from Outside World (Directly connected to top-level ports)
-        .s_axis_tdata   (s_axis_tdata),
-        .s_axis_tkeep   (s_axis_tkeep),
-        .s_axis_tuser   (s_axis_tuser),
-        .s_axis_tlast   (s_axis_tlast),
-        .s_axis_tvalid  (s_axis_tvalid),
-        .s_axis_tready  (s_axis_tready), // Padder controls the real AXI flow
+        .s_axis_tdata_i     (s_axis_tdata),
+        .s_axis_tkeep_i     (s_axis_tkeep),
+        .s_axis_tuser_i     (s_axis_tuser),
+        .s_axis_tlast_i     (s_axis_tlast),
+        .s_axis_tvalid_i    (s_axis_tvalid),
+        .s_axis_tready_o    (s_axis_tready), // Padder controls the real AXI flow
 
         // Formatted Output to Internal Logic
-        .padded_tdata   (padded_tdata),
-        .padded_tkeep   (padded_tkeep),
-        .padded_tuser   (padded_tuser),
-        .padded_tlast   (padded_tlast),
-        .padded_tvalid  (padded_tvalid),
-        .padded_tready  (padded_tready)  // Driven by the active FSM via the Arbiter
+        .padded_tdata_o     (padded_tdata),
+        .padded_tkeep_o     (padded_tkeep),
+        .padded_tuser_o     (padded_tuser),
+        .padded_tlast_o     (padded_tlast),
+        .padded_tvalid_o    (padded_tvalid),
+        .padded_tready_i    (padded_tready)  // Driven by the active FSM via the Arbiter
     );
 
     // The Top Level Mux directly feeds the Core based on the Mode
