@@ -75,20 +75,6 @@ jobs:
       - run: apt-get update && apt-get install -y make g++
       - run: make run_all SIM=verilator
 
-  # --- 2. Synthesis Check (Yosys) ---
-  # Ensures code can actually become hardware (catches latches/bad syntax)
-  # synthesis-check:
-  #   runs-on: ubuntu-latest
-  #   container: hdlc/yosys:latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Run Dummy Synthesis
-  #       # -E = stop if errors
-  #       # read_verilog -sv = read SystemVerilog
-  #       # synth = try to synthesize generic gates
-  #       run: |
-  #         yosys -p "read_verilog -sv rtl/ascon_pkg.sv rtl/substitution_layer.sv; synth"
-
   # --- 2. Synthesis Check (Yosys + Slang) ---
   # Ensures code can actually become hardware (catches latches/bad syntax)
   synthesis-check:
@@ -106,7 +92,7 @@ jobs:
         # -m slang  = load the Slang plugin
         # read_slang = use Slang to parse the SystemVerilog natively
         run: |
-          yosys -m slang -p "read_slang rtl/ascon_pkg.sv rtl/substitution_layer.sv; synth"
+          yosys -m slang -p "read_slang rtl/ascon_pkg.sv rtl/substitution_layer.sv rtl/linear_diffusion_layer.sv rtl/constant_addition_layer.sv; synth"
 
   # --- 3. Linter ---
   lint:
