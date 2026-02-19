@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  simulate:
+  simulate-vsim:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
