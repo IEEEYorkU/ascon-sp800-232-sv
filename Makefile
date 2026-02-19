@@ -2,15 +2,16 @@
 # Dual-Simulator Makefile
 # =====================
 
-# List of testbenches
-TESTBENCHES = substitution_layer_tb constant_addition_layer_tb linear_diffusion_layer_tb
+# 1. Dynamically read RTL files from the filelist (rtl.f)
+# - grep -v '^\#' ignores commented lines
+# - grep -v '^$$' ignores empty lines
+# This preserves the exact order from the filelist rtl.f
+RTL_FILES = $(shell grep -v '^\#' rtl.f | grep -v '^$$')
 
-# --- PATH DEFINITIONS ---
-LIB_DIR     = .
-LIB_SRCS    = $(wildcard $(LIB_DIR)/rtl/*.sv)
-PKG_SRCS    = rtl/ascon_pkg.sv
-DESIGN_SRCS = $(wildcard rtl/*.sv)
-COMMON_SRCS = $(wildcard rtl/*.svh)
+# 2. Automatically discover all testbenches
+# This looks in the tb/ directory for anything ending in _tb.sv
+# and strips the "tb/" and ".sv" to get the module name (e.g., substitution_layer_tb)
+TESTBENCHES = $(patsubst tb/%.sv,%,$(wildcard tb/*_tb.sv))
 
 # Simulator selection (default to vsim if not specified)
 # Usage: make run_all SIM=verilator
@@ -36,21 +37,22 @@ run_all:
 # Rule for each testbench
 run_%:
 	@echo "=== Running $* with $(SIM) ==="
-ifeq ($(SIM), verilator) # Catch 'verilator'
-    # 1. Verilate (Compile to C++ -> Compile to Exe)
-    # We filter out the specific TB we are running + Design + Packages
+ifeq ($(SIM), verilator)
+	# --- VERILATOR FLOW ---
+	# Pass the filelist natively with -f
 	verilator $(VERILATOR_FLAGS) \
-		+incdir+$(LIB_DIR)/rtl \
+		+incdir+rtl \
 		--top-module $* \
-		$(PKG_SRCS) $(COMMON_SRCS) $(filter-out $(PKG_SRCS), $(DESIGN_SRCS)) tb/$*.sv
+		-f rtl.f \
+		tb/$*.sv
 
-    # 2. Run the executable (Generated in obj_dir/V<top_module_name>)
 	./obj_dir/V$*
 else
-    # --- MODELSIM FLOW (Your existing code) ---
+	# --- MODELSIM FLOW ---
 	vlib work
-	vlog -work work -sv +incdir+$(LIB_DIR)/rtl $(PKG_SRCS) $(LIB_SRCS)
-	vlog -work work -sv +incdir+$(LIB_DIR)/rtl $(filter-out $(PKG_SRCS), $(DESIGN_SRCS)) $(COMMON_SRCS) tb/$*.sv
+	# Pass the filelist natively with -f
+	vlog -work work -sv +incdir+rtl -f rtl.f tb/$*.sv
+
 	@echo 'vcd file "$*.vcd"' > run_$*.macro
 	@echo 'vcd add -r /$*/*' >> run_$*.macro
 	@echo 'run -all' >> run_$*.macro
