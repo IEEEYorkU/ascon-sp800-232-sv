@@ -2,18 +2,20 @@
  * Module Name: substitution_layer
  * Author(s): Arthur Sabadini, Kevin Duong
  * Description: The substitution layer applies a 5-bit nonlinear S-box in bit-sliced form across the entire state.
- *              This layer provides the "confusion" property to secure the state against linear analysis.
+ * This layer provides the "confusion" property to secure the state against linear analysis.
  * Ref: NIST SP 800-232
  */
 
+import ascon_pkg::*;
+
 module substitution_layer (
-    input   ascon_pkg::ascon_state_t   state_array_i,
-    output  ascon_pkg::ascon_state_t   state_array_o
+    input   ascon_state_t   state_array_i,
+    output  ascon_state_t   state_array_o
 );
+
     // ----------------------------------------------------------------------
     // S-box Function (Bulletproof for Synthesis)
     // ----------------------------------------------------------------------
-    // Replaces the parameter array to guarantee Yosys compatibility.
     function automatic logic [4:0] apply_sbox(input logic [4:0] val);
         case (val)
             5'd0:  apply_sbox = 5'h4;
@@ -55,33 +57,30 @@ module substitution_layer (
     // ----------------------------------------------------------------------
     // Parallel S-box Application
     // ----------------------------------------------------------------------
-    genvar j;
-    generate
-        for (j = 0; j < ascon_pkg::WORD_WIDTH; j++) begin : gen_sbox_loop
-            // Intermediate wires to avoid LHS concatenation quirks
-            wire [4:0] slice_in;
-            wire [4:0] slice_out;
+    always_comb begin
+        // By using a procedural block instead of 'generate/assign', 
+        // Yosys can safely unroll the array indexing without crashing.
+        logic [4:0] slice_in;
+        logic [4:0] slice_out;
 
+        for (integer j = 0; j < WORD_WIDTH; j = j + 1) begin
             // 1. Pack the 5 bits from the state into a single vector
-            assign slice_in = {
-                state_array_i[0][j],
-                state_array_i[1][j],
-                state_array_i[2][j],
-                state_array_i[3][j],
-                state_array_i[4][j]
-            };
+            slice_in[4] = state_array_i[0][j];
+            slice_in[3] = state_array_i[1][j];
+            slice_in[2] = state_array_i[2][j];
+            slice_in[1] = state_array_i[3][j];
+            slice_in[0] = state_array_i[4][j];
 
             // 2. Pass it through the S-box function
-            assign slice_out = apply_sbox(slice_in);
+            slice_out = apply_sbox(slice_in);
 
             // 3. Unpack the vector back into the output state array bit-by-bit
-            // Note: {a, b, c, d, e} makes 'a' the MSB (bit 4) and 'e' the LSB (bit 0)
-            assign state_array_o[0][j] = slice_out[4];
-            assign state_array_o[1][j] = slice_out[3];
-            assign state_array_o[2][j] = slice_out[2];
-            assign state_array_o[3][j] = slice_out[1];
-            assign state_array_o[4][j] = slice_out[0];
+            state_array_o[0][j] = slice_out[4];
+            state_array_o[1][j] = slice_out[3];
+            state_array_o[2][j] = slice_out[2];
+            state_array_o[3][j] = slice_out[1];
+            state_array_o[4][j] = slice_out[0];
         end
-    endgenerate
+    end
 
 endmodule
