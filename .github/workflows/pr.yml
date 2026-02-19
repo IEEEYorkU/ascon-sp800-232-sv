@@ -67,29 +67,31 @@ jobs:
           source env.sh
           make
 
+  # --- 1. Fast Simulation (Verilator) ---
   verilator-build:
     runs-on: ubuntu-latest
-    # This line runs all steps inside a container with the latest Verilator pre-installed
     container: verilator/verilator:latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - run: apt-get update && apt-get install -y make g++
+      - run: make run_all SIM=verilator
 
-      - name: Install Make and G++
-        # The container is minimal, so we ensure we have build tools
+  # --- 2. Synthesis Check (Yosys) ---
+  # Ensures code can actually become hardware (catches latches/bad syntax)
+  synthesis-check:
+    runs-on: ubuntu-latest
+    container: yosyshq/yosys:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Dummy Synthesis
+        # -E = stop if errors
+        # read_verilog -sv = read SystemVerilog
+        # synth = try to synthesize generic gates
         run: |
-          apt-get update && apt-get install -y make g++ git
+          yosys -p "read_verilog -sv rtl/*.sv; synth"
 
-      - name: Verify Version
-        run: verilator --version
-
-      - name: Run Verilator Simulation
-        # We pass a specific flag to your makefile to tell it to use Verilator
-        run: make run_all SIM=verilator
-
+  # --- 3. Linter ---
   lint:
     runs-on: ubuntu-latest
     permissions:
