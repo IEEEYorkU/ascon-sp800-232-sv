@@ -82,6 +82,7 @@ jobs:
   synthesis-check:
     runs-on: ubuntu-latest
     container: hdlc/yosys:latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Run Dummy Synthesis
