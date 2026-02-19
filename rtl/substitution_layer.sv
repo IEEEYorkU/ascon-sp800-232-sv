@@ -57,7 +57,7 @@ module substitution_layer (
     // ----------------------------------------------------------------------
     genvar j;
     generate
-        for (j = 0; j < WORD_WIDTH; j++) begin : gen_sbox_loop
+        for (j = 0; j < ascon_pkg::WORD_WIDTH; j++) begin : gen_sbox_loop
             // Pass the bit-slice into the function, get the result out
             assign {
                 state_array_o[0][j],
