@@ -5,8 +5,7 @@
  *
  */
 
-`timescale 1ns/1ps`timescale 1ns/1ps
-
+`timescale 1ns/1ps
 import ascon_pkg::*;
 
 module substitution_layer_tb;
