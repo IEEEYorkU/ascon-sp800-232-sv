@@ -58,20 +58,29 @@ module substitution_layer (
     genvar j;
     generate
         for (j = 0; j < ascon_pkg::WORD_WIDTH; j++) begin : gen_sbox_loop
-            // Pass the bit-slice into the function, get the result out
-            assign {
-                state_array_o[0][j],
-                state_array_o[1][j],
-                state_array_o[2][j],
-                state_array_o[3][j],
-                state_array_o[4][j]
-            } = apply_sbox({
+            // Intermediate wires to avoid LHS concatenation quirks
+            wire [4:0] slice_in;
+            wire [4:0] slice_out;
+
+            // 1. Pack the 5 bits from the state into a single vector
+            assign slice_in = {
                 state_array_i[0][j],
                 state_array_i[1][j],
                 state_array_i[2][j],
                 state_array_i[3][j],
                 state_array_i[4][j]
-            });
+            };
+
+            // 2. Pass it through the S-box function
+            assign slice_out = apply_sbox(slice_in);
+
+            // 3. Unpack the vector back into the output state array bit-by-bit
+            // Note: {a, b, c, d, e} makes 'a' the MSB (bit 4) and 'e' the LSB (bit 0)
+            assign state_array_o[0][j] = slice_out[4];
+            assign state_array_o[1][j] = slice_out[3];
+            assign state_array_o[2][j] = slice_out[2];
+            assign state_array_o[3][j] = slice_out[1];
+            assign state_array_o[4][j] = slice_out[0];
         end
     endgenerate
 
