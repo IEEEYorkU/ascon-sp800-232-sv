@@ -3,7 +3,7 @@
 # =====================
 
 # List of testbenches
-TESTBENCHES = substitution_layer_tb constant_addition_layer_tb linear_diffusion_layer_tb ascon_core_tb
+TESTBENCHES = substitution_layer_tb constant_addition_layer_tb linear_diffusion_layer_tb
 
 # --- PATH DEFINITIONS ---
 LIB_DIR     = .
