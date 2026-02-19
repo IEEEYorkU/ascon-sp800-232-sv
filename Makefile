@@ -36,7 +36,7 @@ run_all:
 # Rule for each testbench
 run_%:
 	@echo "=== Running $* with $(SIM) ==="
-ifeq ($(SIM), verilat) # Catch 'verilator'
+ifeq ($(SIM), verilator) # Catch 'verilator'
     # 1. Verilate (Compile to C++ -> Compile to Exe)
     # We filter out the specific TB we are running + Design + Packages
 	verilator $(VERILATOR_FLAGS) \
