@@ -6,9 +6,9 @@
  * Ref: NIST SP 800-232
  */
 
-import ascon_pkg::*;
-
-module substitution_layer (
+module substitution_layer
+    import ascon_pkg::*;
+(
     input   ascon_state_t   state_array_i,
     output  ascon_state_t   state_array_o
 );
