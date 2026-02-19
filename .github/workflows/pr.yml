@@ -81,7 +81,7 @@ jobs:
   # Ensures code can actually become hardware (catches latches/bad syntax)
   synthesis-check:
     runs-on: ubuntu-latest
-    container: yosyshq/yosys:latest
+    container: hdlc/yosys:latest
     steps:
       - uses: actions/checkout@v4
       - name: Run Dummy Synthesis
