@@ -92,8 +92,7 @@ jobs:
         # -m slang  = load the Slang plugin
         # read_slang = use Slang to parse the SystemVerilog natively
         run: |
-          FILES=$(grep -v '^#' rtl.f)
-          yosys -m slang -p "read_slang $FILES; synth"
+          yosys -m slang -p "read_slang -f rtl.f; synth"
 
   # --- 3. Linter ---
   lint:
