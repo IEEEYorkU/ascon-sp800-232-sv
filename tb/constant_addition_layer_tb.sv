@@ -12,15 +12,17 @@ import ascon_pkg::*;
 module constant_addition_layer_tb;
 
     // Input and output signals for the dut
+    logic round_config_i;
+    rnd_t rnd_i;
     ascon_state_t state_array_i;
     ascon_state_t state_array_o;
-    rnd_t rnd_i;
 
     // Test signals
     ascon_state_t test_array_i;
     rnd_t test_rnd_i;
 
     constant_addition_layer dut (
+        .round_config_i(round_config_i),
         .rnd_i(rnd_i),
         .state_array_i(state_array_i),
         .state_array_o(state_array_o)
@@ -81,15 +83,18 @@ module constant_addition_layer_tb;
     initial clk = 0;
     always #1 clk = ~clk;
 
+    integer max_tests = 20;
+
     initial begin
         // *** Required for verilator ***
-        // $dumpfile("constant_addition_layer_tb.vcd");
-        // $dumpvars(0, constant_addition_layer_tb);
+        $dumpfile("constant_addition_layer_tb.vcd");
+        $dumpvars(0, constant_addition_layer_tb);
 
         // Test 1 All Zero Input Array
         $display("Test 1: All Zero Input...");
         test_array_i = '0;
         state_array_i = test_array_i;
+        round_config_i = 1'd1;
         for (int i = 0; i < 12; i++) begin
             test_rnd_i = rnd_t'(i);
             rnd_i = test_rnd_i;
@@ -102,7 +107,8 @@ module constant_addition_layer_tb;
 
         // Test 2 Exhaustive Cases
         $display("Test 2: Exhaustive Random Input...");
-        for (int i = 0; i < 20; i++) begin
+        round_config_i = 1'd1;
+        for (int i = 0; i < max_tests; i++) begin
             rand_rnd(test_rnd_i);
             rand_array(test_array_i);
             state_array_i = test_array_i;
@@ -110,6 +116,36 @@ module constant_addition_layer_tb;
             #1;
             check_unchanged(test_rnd_i, test_array_i, state_array_o);
             check_output(test_rnd_i, test_array_i, state_array_o);
+        end
+
+        #1;
+
+        // Test 3 Round 8 All Zeros
+        $display("Test 3: All Zero Input...");
+        test_array_i = '0;
+        state_array_i = test_array_i;
+        round_config_i = 1'd0;
+        for (int i = 0; i < 12; i++) begin
+            test_rnd_i = rnd_t'(i);
+            rnd_i = test_rnd_i;
+            #1;
+            check_unchanged(test_rnd_i + 4, test_array_i, state_array_o);
+            check_output(test_rnd_i + 4, test_array_i, state_array_o);
+        end
+
+        #1;
+
+        // Test 4 Round 8 Exhaustive Cases
+        $display("Test 4: Exhaustive Random Input...");
+        round_config_i = 0;
+        for (int i = 0; i < max_tests; i++) begin
+            rand_rnd(test_rnd_i);
+            rand_array(test_array_i);
+            state_array_i = test_array_i;
+            rnd_i = test_rnd_i;
+            #1;
+            check_unchanged(test_rnd_i + 4, test_array_i, state_array_o);
+            check_output(test_rnd_i + 4, test_array_i, state_array_o);
         end
 
         $finish;
