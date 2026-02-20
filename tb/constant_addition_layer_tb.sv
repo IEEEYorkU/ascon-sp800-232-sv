@@ -96,9 +96,9 @@ module constant_addition_layer_tb;
         state_array_i = test_array_i;
         round_config_i = 1'd1;
         for (int i = 0; i < 12; i++) begin
-            test_rnd_i = rnd_t'(i);
-            rnd_i = test_rnd_i;
             #1;
+            test_rnd_i <= rnd_t'(i);
+            rnd_i <= test_rnd_i;
             check_unchanged(test_rnd_i, test_array_i, state_array_o);
             check_output(test_rnd_i, test_array_i, state_array_o);
         end
