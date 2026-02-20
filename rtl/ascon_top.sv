@@ -119,7 +119,6 @@ module ascon_top #(
     logic [2:0]     aead_word_sel, hash_word_sel;
     logic           aead_start_perm, hash_start_perm;
     logic           aead_xor_en, hash_xor_en;
-    logic [1:0]     aead_sel_data, hash_sel_data;
     ascon_word_t    aead_data_o, hash_data_o;
      logic [1:0]    aead_xor_sel, hash_xor_sel;
 
