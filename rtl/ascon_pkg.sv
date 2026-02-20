@@ -69,9 +69,9 @@ package ascon_pkg;
     // --- XOR OP2 Select Enum ---
     // Selects what data is being fed into the xor unit
     typedef enum logic [1:0] {
-        XOR_IN_AEAD_SEL = 3'b000,
-        XOR_IN_HASH_SEL = 3'b001,
-        XOR_IN_AXI_SEL  = 3'b010
+        XOR_IN_AEAD_SEL = 2'b00,
+        XOR_IN_HASH_SEL = 2'b01,
+        XOR_IN_AXI_SEL  = 2'b10
     } xor_sel_t;
 
 endpackage : ascon_pkg
