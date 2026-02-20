@@ -97,8 +97,9 @@ module constant_addition_layer_tb;
         round_config_i = 1'd1;
         for (int i = 0; i < 12; i++) begin
             #1;
-            test_rnd_i <= rnd_t'(i);
-            rnd_i <= test_rnd_i;
+            test_rnd_i = rnd_t'(i);
+            rnd_i = test_rnd_i;
+            #1;
             check_unchanged(test_rnd_i, test_array_i, state_array_o);
             check_output(test_rnd_i, test_array_i, state_array_o);
         end
@@ -109,6 +110,7 @@ module constant_addition_layer_tb;
         $display("Test 2: Exhaustive Random Input...");
         round_config_i = 1'd1;
         for (int i = 0; i < max_tests; i++) begin
+            #1;
             rand_rnd(test_rnd_i);
             rand_array(test_array_i);
             state_array_i = test_array_i;
@@ -126,6 +128,7 @@ module constant_addition_layer_tb;
         state_array_i = test_array_i;
         round_config_i = 1'd0;
         for (int i = 0; i < 12; i++) begin
+            #1;
             test_rnd_i = rnd_t'(i);
             rnd_i = test_rnd_i;
             #1;
@@ -139,6 +142,7 @@ module constant_addition_layer_tb;
         $display("Test 4: Exhaustive Random Input...");
         round_config_i = 0;
         for (int i = 0; i < max_tests; i++) begin
+            #1;
             rand_rnd(test_rnd_i);
             rand_array(test_array_i);
             state_array_i = test_array_i;
