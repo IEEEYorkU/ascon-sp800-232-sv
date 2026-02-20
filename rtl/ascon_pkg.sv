@@ -60,10 +60,10 @@ package ascon_pkg;
     // --- Ascon Core Data-In Select Enum ---
     // Selects what data is being fed into the ascon core
     typedef enum logic [1:0] {
-        DATA_IN_AXI_SEL    = 2'b00;
-        DATA_IN_AEAD_SEL   = 2'b01;
-        DATA_IN_HASH_SEL   = 2'b10;
-        DATA_IN_XOR_SEL    = 2'b11;
+        DATA_IN_AXI_SEL    = 2'b00,
+        DATA_IN_AEAD_SEL   = 2'b01,
+        DATA_IN_HASH_SEL   = 2'b10,
+        DATA_IN_XOR_SEL    = 2'b11
     } data_sel_t;
 
     // --- XOR OP2 Select Enum ---
