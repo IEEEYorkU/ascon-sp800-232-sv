@@ -55,4 +55,42 @@ module ascon_core_tb;
     // as soon as rnd_cnt = 0. On the next clk cycle the values will change,
     // as data_o will be updated.
 
+    // Clock generation
+    always #5 clk = ~clk;
+
+    // ----------------------------
+    // Timing Verification
+    // ----------------------------
+
+    property not_ready_on_start;
+        @(posedge clk)
+        start_perm_i |-> !ready_o;
+    endproperty
+
+    property data_stable_when_ready;
+        @(posedge clk)
+        ready_o |-> $stable(data_o);
+    endproperty
+
+    property write_successful_on_idle;
+        @(posedge clk)
+        ((dut.state == STATE_IDLE) & write_en_i & !xor_en_i) |-> (dut.state_array[word_sel_i] == data_i);
+    endproperty
+
+    property xor_write_sucessful_on_idle;
+        @(posedge clk)
+        ((dut.state == STATE_IDLE) & write_en_i & xor_en_i) |-> (
+            dut.state_array[word_sel_i] == dut.state_array[word_sel_i] ^ data_i
+        );
+    endproperty
+
+    // ----------------------------
+    // Properties Assertions 
+    // ----------------------------
+
+    assert property (data_stable_when_ready);
+    assert property (not_ready_on_start);
+    assert property (write_successful_on_idle);
+    assert property (xor_write_successful_on_idle);
+
 endmodule
