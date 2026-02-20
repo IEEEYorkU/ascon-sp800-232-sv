@@ -5,11 +5,9 @@ on:
     branches:
       - main
   pull_request:
-    branches:
-      - main
 
 jobs:
-  simulate:
+  vsim-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -67,6 +65,36 @@ jobs:
           source env.sh
           make
 
+  # --- 1. Fast Simulation (Verilator) ---
+  verilator-build:
+    runs-on: ubuntu-latest
+    container: verilator/verilator:latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - run: apt-get update && apt-get install -y make g++
+      - run: make run_all SIM=verilator
+
+  # --- 2. Synthesis Check (Yosys + Slang) ---
+  # Ensures code can actually become hardware (catches latches/bad syntax)
+  synthesis-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup OSS CAD Suite
+        # This official action installs the latest nightly build natively
+        uses: YosysHQ/setup-oss-cad-suite@v3
+        with:
+          # Optional but recommended: prevents GitHub API rate limiting
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Dummy Synthesis with Slang
+        # -m slang  = load the Slang plugin
+        # read_slang = use Slang to parse the SystemVerilog natively
+        run: |
+          yosys -m slang -p "read_slang -f rtl.f; synth"
+
+  # --- 3. Linter ---
   lint:
     runs-on: ubuntu-latest
     permissions:
