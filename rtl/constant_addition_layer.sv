@@ -29,7 +29,7 @@ module constant_addition_layer (
         8'h78, // i=8
         8'h69, // i=9
         8'h5a, // i=10
-        8'h4b, // i=11
+        8'h4b // i=11
     };
 
     always_comb begin
