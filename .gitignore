@@ -14,3 +14,7 @@ obj_dir/
 #Verilator Files
 tb_main_verilator.cpp
 tb_main.make
+# The compiled executable (from iverilog -o)
+*.out
+ascon_sim
+sim.out
