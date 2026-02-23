@@ -29,8 +29,8 @@ package permutations_sim_pkg;
         8'h4b // i=11
     };
 
-    function automatic logic [319:0] addition(
-        input logic [3:0] rnd,
+    function automatic ascon_state_t addition(
+        input rnd_t rnd,
         input logic round_config_i,
         input ascon_state_t state_array_i
     );
@@ -53,20 +53,29 @@ package permutations_sim_pkg;
 
     //This is meant to be the expected output, we can use to compare
     //the results from sbox_eq function to our actual implementation substitution_layer.sv
-    function automatic logic [319:0] substitution(
+    function automatic ascon_state_t substitution(
         input ascon_state_t x
     );
 
         ascon_state_t y;
         begin
             for(int j =0; j < WORD_WIDTH; j++) begin
-                y[0][j] = (x[4][j] & x[1][j]) ^ x[3][j] ^ (x[2][j] & x[1][j]) ^ x[2][j] ^ 
-                            (x[1][j] & x[0][j]) ^ x[1][j] ^ x[0][j];
-                y[1][j] = x[4][j] ^ (x[3][j] & x[2][j]) ^ (x[3][j] & x[1][j]) ^ x[3][j] ^ 
-                            (x[2][j] & x[1][j]) ^ x[2][j] ^ x[1][j]^ x[0][j];
+                y[0][j] = (x[4][j] & x[1][j]) ^ x[3][j]
+                        ^ (x[2][j] & x[1][j]) ^ x[2][j]
+                        ^ (x[1][j] & x[0][j]) ^ x[1][j]
+                        ^ x[0][j];
+                
+                y[1][j] = x[4][j] ^ (x[3][j] & x[2][j])
+                        ^ (x[3][j] & x[1][j]) ^ x[3][j]
+                        ^ (x[2][j] & x[1][j]) ^ x[2][j]
+                        ^ x[1][j]^ x[0][j];
+                
                 y[2][j] = (x[4][j] & x[3][j]) ^ x[4][j] ^ x[2][j] ^ x[1][j] ^ 1'b1;
-                y[3][j] = (x[4][j] & x[0][j]) ^ x[4][j] ^ (x[3][j] & x[0][j]) ^ x[3][j] ^ 
-                            x[2][j] ^ x[1][j] ^ x[0][j];
+                
+                y[3][j] = (x[4][j] & x[0][j]) ^ x[4][j]
+                        ^ (x[3][j] & x[0][j]) ^ x[3][j]
+                        ^ x[2][j] ^ x[1][j]   ^ x[0][j];
+                
                 y[4][j] = (x[4][j] & x[1][j]) ^ x[4][j] ^ x[3][j] ^ (x[1][j] & x[0][j]) ^ x[1][j];
             end
 
@@ -79,12 +88,12 @@ package permutations_sim_pkg;
     // ----------------------------------------------------------
 
     // reference model: Right Circular Rotation (ROR). The corrcet behaviour of the Layer
-    function automatic logic [63:0] ror64(input logic [63:0] data, input int shift);
+    function automatic ascon_word_t ror64(input ascon_word_t data, input int shift);
         return (data >> shift) | (data << (64 - shift));
     endfunction
 
     // Compute expected output using the Ascon Sigma functions
-    function automatic logic [319:0] diffution(
+    function automatic ascon_state_t diffution(
         input  ascon_state_t in_state
     );
         int r_a [5]; //rotation a
@@ -114,7 +123,7 @@ package permutations_sim_pkg;
     // Ascon Core Permutations Simulation
     // ----------------------------------------------------------
 
-    function automatic logic [319:0] ascon_perm(
+    function automatic ascon_state_t ascon_perm(
         input logic round_config_i,
         input ascon_state_t state_i
     );
