@@ -44,7 +44,7 @@ module ascon_core_tb;
     ascon_core dut(
         .clk(clk), .rst(rst),
         .start_perm_i(start_perm_i),
-        .round_config_o(round_config_i),
+        .round_config_i(round_config_i),
         .word_sel_i(word_sel_i),
         .data_i(data_i),
         .write_en_i(write_en_i),
