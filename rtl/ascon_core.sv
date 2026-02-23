@@ -91,6 +91,10 @@ module ascon_core (
                     next_state = STATE_IDLE;
                 end
             end
+
+            default: begin
+                next_state = STATE_IDLE;
+            end
         endcase
     end
 
@@ -103,6 +107,10 @@ module ascon_core (
         case(state)
             STATE_IDLE: begin
                 ready_o = 1'd1;
+            end
+
+            default: begin
+                ready_o = 1'd0;
             end
         endcase
     end
