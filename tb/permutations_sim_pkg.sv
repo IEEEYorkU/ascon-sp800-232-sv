@@ -38,8 +38,8 @@ package permutations_sim_pkg;
         ascon_state_t state_array_o;
         begin
             state_array_o = state_array_i;
-            state_array_o[2] = (round_config_i) ? state_array_i[2] ^ ConstAddLUT[rnd_i]
-                                                : state_array_i[2] ^ ConstAddLUT[rnd_i + 4];
+            state_array_o[2] = (round_config_i) ? state_array_i[2] ^ ConstAddLUT[rnd]
+                                                : state_array_i[2] ^ ConstAddLUT[rnd + 4];
 
             return state_array_o;
         end
