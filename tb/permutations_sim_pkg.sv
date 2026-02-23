@@ -1,7 +1,7 @@
 /*
  * Package Name: permutations_sim
  * Author: Arthur Sabadini, Kevin Duong, Tirth Patel, Artin Kiany, Sasha Calmels, Patrick de Leo
- * Description: Functions used to simulate the output of each permutation  
+ * Description: Functions used to simulate the output of each permutation
  * Ref: NIST SP 800-232
  */
 
@@ -30,7 +30,7 @@ package permutations_sim_pkg;
     };
 
     function automatic logic [319:0] addition(
-        input rnd_t rnd,
+        input logic [3:0] rnd,
         input logic round_config_i,
         input ascon_state_t state_array_i
     );
@@ -60,10 +60,13 @@ package permutations_sim_pkg;
         ascon_state_t y;
         begin
             for(int j =0; j < WORD_WIDTH; j++) begin
-                y[0][j] = (x[4][j] & x[1][j]) ^ x[3][j] ^ (x[2][j] & x[1][j]) ^ x[2][j] ^ (x[1][j] & x[0][j]) ^ x[1][j] ^ x[0][j];
-                y[1][j] = x[4][j] ^ (x[3][j] & x[2][j]) ^ (x[3][j] & x[1][j]) ^ x[3][j] ^ (x[2][j] & x[1][j]) ^ x[2][j] ^ x[1][j]^ x[0][j];
+                y[0][j] = (x[4][j] & x[1][j]) ^ x[3][j] ^ (x[2][j] & x[1][j]) ^ x[2][j] ^ 
+                            (x[1][j] & x[0][j]) ^ x[1][j] ^ x[0][j];
+                y[1][j] = x[4][j] ^ (x[3][j] & x[2][j]) ^ (x[3][j] & x[1][j]) ^ x[3][j] ^ 
+                            (x[2][j] & x[1][j]) ^ x[2][j] ^ x[1][j]^ x[0][j];
                 y[2][j] = (x[4][j] & x[3][j]) ^ x[4][j] ^ x[2][j] ^ x[1][j] ^ 1'b1;
-                y[3][j] = (x[4][j] & x[0][j]) ^ x[4][j] ^ (x[3][j] & x[0][j]) ^ x[3][j] ^ x[2][j] ^ x[1][j] ^ x[0][j];
+                y[3][j] = (x[4][j] & x[0][j]) ^ x[4][j] ^ (x[3][j] & x[0][j]) ^ x[3][j] ^ 
+                            x[2][j] ^ x[1][j] ^ x[0][j];
                 y[4][j] = (x[4][j] & x[1][j]) ^ x[4][j] ^ x[3][j] ^ (x[1][j] & x[0][j]) ^ x[1][j];
             end
 
@@ -107,9 +110,8 @@ package permutations_sim_pkg;
         return out_state;
     endfunction
 
-
     // ----------------------------------------------------------
-    // Ascon Core Permutations Simulation 
+    // Ascon Core Permutations Simulation
     // ----------------------------------------------------------
 
     function automatic logic [319:0] ascon_perm(
@@ -120,8 +122,8 @@ package permutations_sim_pkg;
         rnd_t rnd = round_config_i ? 4'd11: 4'd7;
         ascon_state_t state_o = state_i;
         for(int rnd_i = 0; rnd_i < rnd; rnd_i++) begin
-            state_o = addition(rnd_i, round_config_i, state_o); 
-            state_o = substitution(state_o); 
+            state_o = addition(rnd_i, round_config_i, state_o);
+            state_o = substitution(state_o);
             state_o = diffution(state_o);
         end
 
@@ -130,7 +132,7 @@ package permutations_sim_pkg;
     endfunction
 
     // ----------------------------------------------------------
-    // Utils and Helper Functions 
+    // Utils and Helper Functions
     // ----------------------------------------------------------
 
     // Creates a random round number to aid in verifying correctness of hardware.
