@@ -32,14 +32,13 @@ module ascon_core (
 );
 
     // FSM States
-    typedef enum logic [1:0] {
+    typedef enum logic [0:0] {
 		STATE_IDLE,
-		STATE_INIT,
 		STATE_PERM
     } state_t;
     state_t state = STATE_IDLE, next_state;
 	
-	rnd_t rnd_cnt;
+	rnd_t rnd_cnt = 0;
 	ascon_state_t state_array = 320'd0;
 	
 	// Permutation Layers Output
@@ -47,6 +46,7 @@ module ascon_core (
 	
 	// Permutation Layers Instances
 	constant_addition_layer const_add(
+        .round_config_i(round_config_i),
         .rnd_i(rnd_cnt),
         .state_array_i(state_array),
         .state_array_o(addition_state_array_o)
@@ -78,18 +78,14 @@ module ascon_core (
 	    case(state)
             STATE_IDLE: begin
                 if(start_perm_i) begin
-                    next_state = STATE_INIT;
+                    next_state = STATE_PERM;
                 end else begin
                     next_state = STATE_IDLE;
                 end
             end
             
-            STATE_INIT: begin
-                next_state = STATE_PERM;
-            end
-            
-            STATE_PERM: begin
-                if(rnd_cnt > 0) begin
+            STATE_PERM: begin            
+                if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
                     next_state = STATE_PERM;
                 end else begin
                     next_state = STATE_IDLE;
@@ -128,21 +124,18 @@ module ascon_core (
                         end
                     end
                 end
-				  
-                STATE_INIT: begin
-                    // Set counter to N-1, to have exactly N rounds.
-                    if(round_config_i) begin
-                        rnd_cnt <= 4'd11;
-                    end else begin
-                        rnd_cnt <= 4'd7;
-                    end
-                end
 
                 STATE_PERM: begin
                     state_array <= diffusion_state_array_o;
-                    if(rnd_cnt > 0)
-                        // Preventing rnd_cnt from wrapping-around.
-                        rnd_cnt <= rnd_cnt - 4'd1;
+                    
+                    // Prevent counter from going out of bounds for
+                    // constant_addition_layer.AsconRcLut
+                    if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
+                        rnd_cnt <= rnd_cnt + 4'd1;
+                    end else begin
+                        // Sync counter reset with ready_o signal
+                        rnd_cnt <= 4'd0;
+                    end
                 end
             endcase
         end
