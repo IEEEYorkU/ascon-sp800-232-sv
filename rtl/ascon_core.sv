@@ -59,7 +59,7 @@ module ascon_core (
         .state_array_i(substitution_state_array_o),
         .state_array_o(diffusion_state_array_o)
     );
-    
+
     // FSM Control Process 1: State Register (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
