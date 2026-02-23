@@ -33,33 +33,33 @@ module ascon_core (
 
     // FSM States
     typedef enum logic [0:0] {
-		STATE_IDLE,
-		STATE_PERM
+        STATE_IDLE,
+        STATE_PERM
     } state_t;
     state_t state = STATE_IDLE, next_state;
-	
-	rnd_t rnd_cnt = 0;
-	ascon_state_t state_array = 320'd0;
-	
+    
+    rnd_t rnd_cnt = 0;
+    ascon_state_t state_array = 320'd0;
+    
 	// Permutation Layers Output
-	ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
+    ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
 	
-	// Permutation Layers Instances
-	constant_addition_layer const_add(
+    // Permutation Layers Instances
+    constant_addition_layer const_add(
         .round_config_i(round_config_i),
         .rnd_i(rnd_cnt),
         .state_array_i(state_array),
         .state_array_o(addition_state_array_o)
     );
-	substitution_layer substitution(
+    substitution_layer substitution(
         .state_array_i(addition_state_array_o),
         .state_array_o(substitution_state_array_o)
     );
-	linear_diffusion_layer diffusion(
+    linear_diffusion_layer diffusion(
         .state_array_i(substitution_state_array_o),
         .state_array_o(diffusion_state_array_o)
     );
-	
+    
     // FSM Control Process 1: State Register (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
@@ -70,12 +70,12 @@ module ascon_core (
         end
     end
     
-	// FSM Control Process 2: Next State Decoder (Combinational)
+    // FSM Control Process 2: Next State Decoder (Combinational)
     // ----------------------------------------------------------
-	always_comb begin
+    always_comb begin
         next_state = state;
-	
-	    case(state)
+        
+        case(state)
             STATE_IDLE: begin
                 if(start_perm_i) begin
                     next_state = STATE_PERM;
@@ -84,7 +84,7 @@ module ascon_core (
                 end
             end
             
-            STATE_PERM: begin            
+            STATE_PERM: begin
                 if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
                     next_state = STATE_PERM;
                 end else begin
@@ -92,7 +92,7 @@ module ascon_core (
                 end
             end
         endcase
-	end
+    end
     
     // FSM Control Process 3: Action Decoder (Combinational)
     // ----------------------------------------------------------
@@ -106,7 +106,7 @@ module ascon_core (
             end
         endcase
     end
-	
+    
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
