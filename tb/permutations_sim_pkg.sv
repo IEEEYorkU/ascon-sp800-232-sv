@@ -64,7 +64,7 @@ package permutations_sim_pkg;
                         ^ (x[2][j] & x[1][j]) ^ x[2][j]
                         ^ (x[1][j] & x[0][j]) ^ x[1][j]
                         ^ x[0][j];
-                
+
                 y[1][j] = x[4][j] ^ (x[3][j] & x[2][j])
                         ^ (x[3][j] & x[1][j]) ^ x[3][j]
                         ^ (x[2][j] & x[1][j]) ^ x[2][j]
@@ -75,7 +75,7 @@ package permutations_sim_pkg;
                 y[3][j] = (x[4][j] & x[0][j]) ^ x[4][j]
                         ^ (x[3][j] & x[0][j]) ^ x[3][j]
                         ^ x[2][j] ^ x[1][j]   ^ x[0][j];
-                
+
                 y[4][j] = (x[4][j] & x[1][j]) ^ x[4][j] ^ x[3][j] ^ (x[1][j] & x[0][j]) ^ x[1][j];
             end
 
