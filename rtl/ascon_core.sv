@@ -122,7 +122,7 @@ module ascon_core (
             rnd_cnt <= 4'd0;
             state_array <= 320'd0;
         end else begin
-            case (state)
+            unique case (state)
                 STATE_IDLE: begin
                     if(write_en_i) begin
                         if(xor_en_i) begin
