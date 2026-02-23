@@ -136,8 +136,8 @@ module ascon_core_tb;
             #1;
             // Generating random input
             rand_array(test_data_i);
-            test_data_o = ascon_perm(round_config_i, test_data_i); 
-
+            test_data_o = ascon_perm(round_config_i, test_data_i);
+            
             // Writting input
             for(int j = 0; j < NUM_WORDS; j++) begin
                 #1;
