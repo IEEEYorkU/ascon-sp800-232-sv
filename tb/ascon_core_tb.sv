@@ -8,7 +8,7 @@
 `timescale 1ns/1ps
 
 import ascon_pkg::*;
-import permutations_sim_pkg::*; 
+import permutations_sim_pkg::*;
 
 module ascon_core_tb;
 
@@ -53,7 +53,7 @@ module ascon_core_tb;
         .ready_o(ready_o)
     );
 
-    // Test note: DUT Permutation instances will have the correct values 
+    // Test note: DUT Permutation instances will have the correct values
     // as soon as rnd_cnt = 0. On the next clk cycle the values will change,
     // as data_o will be updated.
 
@@ -87,7 +87,7 @@ module ascon_core_tb;
     endproperty
 
     // ----------------------------
-    // Properties Assertions 
+    // Properties Assertions
     // ----------------------------
 
     assert property (data_stable_when_ready);
@@ -96,14 +96,14 @@ module ascon_core_tb;
     assert property (xor_write_sucessful_on_idle);
 
     // ----------------------------
-    // Task Definitions 
+    // Task Definitions
     // ----------------------------
 
     // Checks if output state is expected
     task automatic check_core_output(
         input logic [2:0] word_sel_i,
         input ascon_state_t state_exp,
-        input ascon_state_t state_o 
+        input ascon_state_t state_o
     );
         assert(
             state_o[word_sel_i] == state_exp[word_sel_i]
@@ -114,7 +114,7 @@ module ascon_core_tb;
     endtask
 
     // ----------------------------
-    // Tests Begin 
+    // Tests Begin
     // ----------------------------
 
     integer max_tests = 10;
