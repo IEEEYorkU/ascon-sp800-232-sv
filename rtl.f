@@ -1,5 +1,6 @@
 # --- Packages (Must be compiled first) ---
 rtl/ascon_pkg.sv
+tb/permutations_sim_pkg.sv
 
 # --- Ascon Core Layers ---
 rtl/substitution_layer.sv
