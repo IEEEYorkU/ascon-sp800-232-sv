@@ -14,7 +14,7 @@ package permutations_sim_pkg;
     // ----------------------------------------------------------
 
     // 12-entry LUT, each entry is 8 bit round constant
-    localparam logic [7:0] AsconRcLut [12] = '{
+    localparam logic [7:0] ConstAddLUT [12] = '{
         8'hf0, // i=0
         8'he1, // i=1
         8'hd2, // i=2
@@ -114,7 +114,7 @@ package permutations_sim_pkg;
 
     function automatic ascon_state_t ascon_perm(
         input logic round_config_i,
-        input ascon_state_t state_i,
+        input ascon_state_t state_i
     );
 
         rnd_t rnd = round_config_i ? 4'd11: 4'd7;
