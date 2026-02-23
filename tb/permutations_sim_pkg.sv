@@ -29,10 +29,10 @@ package permutations_sim_pkg;
         8'h4b // i=11
     };
 
-    function automatic ascon_state_t addition(
+    function automatic logic [319:0] addition(
         input rnd_t rnd,
         input logic round_config_i,
-        input ascon_state_t state_array_i,
+        input ascon_state_t state_array_i
     );
 
         ascon_state_t state_array_o;
@@ -53,7 +53,7 @@ package permutations_sim_pkg;
 
     //This is meant to be the expected output, we can use to compare
     //the results from sbox_eq function to our actual implementation substitution_layer.sv
-    function automatic ascon_state_t substitution(
+    function automatic logic [319:0] substitution(
         input ascon_state_t x
     );
 
@@ -81,7 +81,7 @@ package permutations_sim_pkg;
     endfunction
 
     // Compute expected output using the Ascon Sigma functions
-    function automatic ascon_state_t diffution(
+    function automatic logic [319:0] diffution(
         input  ascon_state_t in_state
     );
         int r_a [5]; //rotation a
@@ -112,7 +112,7 @@ package permutations_sim_pkg;
     // Ascon Core Permutations Simulation 
     // ----------------------------------------------------------
 
-    function automatic ascon_state_t ascon_perm(
+    function automatic logic [319:0] ascon_perm(
         input logic round_config_i,
         input ascon_state_t state_i
     );
