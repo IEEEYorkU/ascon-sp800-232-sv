@@ -5,9 +5,9 @@
  * Ref: NIST SP 800-232
  */
 
-import ascon_pkg::*;
-
 package permutations_sim_pkg;
+
+    import ascon_pkg::*;
 
     // ----------------------------------------------------------
     // Constant Addition Layer Simulation
