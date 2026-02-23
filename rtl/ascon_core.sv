@@ -69,12 +69,12 @@ module ascon_core (
             state <= next_state;
         end
     end
-    
+
     // FSM Control Process 2: Next State Decoder (Combinational)
     // ----------------------------------------------------------
     always_comb begin
         next_state = state;
-        
+
         case(state)
             STATE_IDLE: begin
                 if(start_perm_i) begin
@@ -83,7 +83,7 @@ module ascon_core (
                     next_state = STATE_IDLE;
                 end
             end
-            
+
             STATE_PERM: begin
                 if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
                     next_state = STATE_PERM;
@@ -93,20 +93,20 @@ module ascon_core (
             end
         endcase
     end
-    
+
     // FSM Control Process 3: Action Decoder (Combinational)
     // ----------------------------------------------------------
     always_comb begin
         ready_o = 1'd0;
         data_o = state_array[word_sel_i];
-        
+
         case(state)
             STATE_IDLE: begin
                 ready_o = 1'd1;
             end
         endcase
     end
-    
+
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
@@ -127,7 +127,7 @@ module ascon_core (
 
                 STATE_PERM: begin
                     state_array <= diffusion_state_array_o;
-                    
+
                     // Prevent counter from going out of bounds for
                     // constant_addition_layer.AsconRcLut
                     if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
