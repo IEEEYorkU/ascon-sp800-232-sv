@@ -40,6 +40,7 @@ module ascon_core_tb;
     // ----------------------------
     ascon_word_t test_data_i;
     ascon_word_t test_data_o;
+    ascon_state_t state_data_o;
 
     ascon_core dut(
         .clk(clk), .rst(rst),
@@ -101,12 +102,11 @@ module ascon_core_tb;
 
     // Checks if output state is expected
     task automatic check_core_output(
-        input logic [2:0] word_sel_i,
         input ascon_state_t state_exp,
         input ascon_state_t state_o
     );
         assert(
-            state_o[word_sel_i] == state_exp[word_sel_i]
+            state_o == state_exp
         )
             $display("Sucess. State out is State Expected.");
         else
@@ -149,14 +149,19 @@ module ascon_core_tb;
 
             word_sel_i = 0;      // Reset index
             start_perm_i = 1;    // Starting Permutation
-            #4;
-            start_perm_i = 0;
+            #4 start_perm_i = 0;
+            
             // Wait for permutations to finish
-            #24;
+            wait(ready_o == 1);
+
+            // Reading full state output
+            for(word_sel_i = 0; word_sel_i < NUM_WORDS; word_sel_i++) begin
+                #4 state_data_o[word_sel_i] = data_o;
+            end
 
             // Wait for output to be stable, and check
             #2;
-            check_core_output(word_sel_i, test_data_o[word_sel_i], data_o);
+            check_core_output(test_data_o, state_data_o);
         end
 
         $finish;
