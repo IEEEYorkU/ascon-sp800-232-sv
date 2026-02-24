@@ -133,29 +133,29 @@ module ascon_core_tb;
         $display("Exhaustive Random Input Test...");
         round_config_i = 1'd1;
         for (int i = 0; i < max_tests; i++) begin
-            #1;
+            #2;
             // Generating random input
             rand_array(test_data_i);
             test_data_o = ascon_perm(round_config_i, test_data_i);
 
-            // Writting input
-            for(int j = 0; j < NUM_WORDS; j++) begin
-                #1;
-                data_i = test_data_i[j];
-                write_en_i = 1;
-                #2;
+            // Writting input 
+            for(word_sel_i = 0; word_sel_i < NUM_WORDS; word_sel_i++) begin
+                #4;
+                data_i = test_data_i[word_sel_i];    // Word to be written
+                write_en_i = 1;                      // Enable write
+                #4;
                 write_en_i = 0;
             end
 
-            // Starting Permutation
-            start_perm_i = 1;
-            #2;
+            word_sel_i = 0;      // Reset index
+            start_perm_i = 1;    // Starting Permutation
+            #4;
             start_perm_i = 0;
             // Wait for permutations to finish
-            #12;
+            #24;
 
             // Wait for output to be stable, and check
-            #1;
+            #2;
             check_core_output(word_sel_i, test_data_o[word_sel_i], data_o);
         end
 
