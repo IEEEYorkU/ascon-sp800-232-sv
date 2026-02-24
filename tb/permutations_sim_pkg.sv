@@ -128,7 +128,7 @@ package permutations_sim_pkg;
         input ascon_state_t state_i
     );
 
-        rnd_t rnd = round_config_i ? 4'd11: 4'd7;
+        rnd_t rnd = round_config_i ? 4'd12: 4'd8;
         ascon_state_t state_o = state_i;
         for(int rnd_i = 0; rnd_i < rnd; rnd_i++) begin
             state_o = addition(rnd_i, round_config_i, state_o);
