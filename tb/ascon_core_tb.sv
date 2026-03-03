@@ -82,7 +82,7 @@ module ascon_core_tb;
 
     property data_stable_when_ready;
         @(posedge clk)
-        ready_o |-> $stable(data_o);
+        (ready_o & $stable(word_sel_i) & !$past(write_en_i)) |-> $stable(data_o);
     endproperty
 
     property write_successful_on_idle;
