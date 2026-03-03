@@ -57,7 +57,68 @@ module hash_fsm (
     // =======================================================================
     // FSM State Declarations & Logic
     // =======================================================================
+    parameter
+    IDLE    = 7'b0000001,
+    INIT    = 7'b0000010,
+    ABSORB  = 7'b0000100,
+    SQUEEZE = 7'b0001000;
+
+    reg [6:0] State, NextState;
 
     // (State machine logic goes here)
+
+    always @(posedge clk)
+        begin
+    if (rst)
+        State <= IDLE;
+    else
+        State <= NextState;
+    end
+
+    always @(State)
+    begin
+    case (State)
+    IDLE: begin
+
+    end
+
+    INIT: begin
+ 
+    end
+
+    ABSORB: begin
+
+    end
+
+    SQUEEZE: begin
+
+    end
+
+    endcase
+    end
+
+
+// Next state generation logic
+
+    always @(State)
+    begin
+    case (State)
+    IDLE: begin
+    
+    end
+
+    INIT: begin
+            
+    end
+
+    ABSORB: begin
+    
+    end
+
+    SQUEEZE: begin
+    
+    end
+    endcase
+    end
 
 endmodule
