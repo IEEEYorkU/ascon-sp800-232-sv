@@ -1,9 +1,6 @@
 import random
 
-
-
 ASCON_RC = [
-    0x3c, 0x2d, 0x1e, 0x0f,
     0xf0, 0xe1, 0xd2, 0xc3,
     0xb4, 0xa5, 0x96, 0x87,
     0x78, 0x69, 0x5a, 0x4b
@@ -37,20 +34,19 @@ def rotr(x, r):
     """Rotate right 64-bit word."""
     return ((x >> r) | (x << (64 - r))) & WORD_MASK
 
+
 # ============================================================
 # Constant Addition Layer (pC)
 # ============================================================
-
 def constant_addition_layer(state, round_idx):
     s = state.copy()
     s[2] ^= ASCON_RC[round_idx]
     return s
 
+
 # ============================================================
 # Substitution Layer (pS)
-# Bit-sliced 5-bit S-box (spec-compliant)
 # ============================================================
-
 def substitution_layer(state):
     s0, s1, s2, s3, s4 = state
 
@@ -83,10 +79,10 @@ def substitution_layer(state):
 
     return [new_s0, new_s1, new_s2, new_s3, new_s4]
 
+
 # ============================================================
 # Linear Diffusion Layer (pL)
 # ============================================================
-
 def linear_diffusion_layer(state):
     s0, s1, s2, s3, s4 = state
 
@@ -102,33 +98,27 @@ def linear_diffusion_layer(state):
             s3 & WORD_MASK,
             s4 & WORD_MASK]
 
+
 # ============================================================
 # One Round of Ascon Permutation
 # ============================================================
-
 def ascon_round(state, round_idx):
     state = constant_addition_layer(state, round_idx)
     state = substitution_layer(state)
     state = linear_diffusion_layer(state)
     return state
 
+
 # ============================================================
 # Full Permutation (N Rounds)
 # ============================================================
-
 def ascon_permutation(state_words, round_config):
-    """
-    round_config = 1 → 12 rounds
-    round_config = 0 → 8 rounds
-    """
 
     state = state_words.copy()
-
     rounds = 12 if round_config else 8
 
     for r in range(rounds):
 
-        # Match RTL constant selection
         if round_config:
             rc_index = r
         else:
@@ -142,20 +132,8 @@ def ascon_permutation(state_words, round_config):
 
 
 # ============================================================
-# Pretty Printing
-# ============================================================
-
-def print_state(words, label="STATE"):
-    print(f"{label}:")
-    for i in range(5):
-        print(f"  S{i} = 0x{words[i]:016x}")
-    print()
-
-
-# ============================================================
 # Generate Golden Output
 # ============================================================
-
 def generate_test_vectors(filename="ascon_vectors.txt", num_tests=20):
     with open(filename, "w") as f:
         for _ in range(num_tests):
