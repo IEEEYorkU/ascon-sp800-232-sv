@@ -138,7 +138,7 @@ module ascon_core_tb;
             rand_array(test_data_i);
             test_data_o = ascon_perm(round_config_i, test_data_i);
 
-            // Writting input 
+            // Writting input
             for(word_sel_i = 0; word_sel_i < NUM_WORDS; word_sel_i++) begin
                 #4;
                 data_i = test_data_i[word_sel_i];    // Word to be written
@@ -150,7 +150,7 @@ module ascon_core_tb;
             word_sel_i = 0;      // Reset index
             start_perm_i = 1;    // Starting Permutation
             #4 start_perm_i = 0;
-            
+
             // Wait for permutations to finish
             wait(ready_o == 1);
 

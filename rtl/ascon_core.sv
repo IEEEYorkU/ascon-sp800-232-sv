@@ -1,9 +1,34 @@
 /*
  * Module Name: ascon_core
- * Author(s): Kiet Le, Arthur Sabadini
- * Description: Applies the Ascon Permutation for a configurable number of
- * rounds.
- * Ref: NISP ST 800-232 Section 3.
+ * Author(s):   Kiet Le, Arthur Sabadini
+ * Description:
+ * The central mathematical engine ("The Muscle") for the Ascon Cryptographic
+ * Accelerator. This module encapsulates the 320-bit Ascon state and iteratively
+ * executes the three permutation layers (Constant Addition, Substitution, and
+ * Linear Diffusion) for a configurable number of rounds.
+ *
+ * Design Philosophy (Decoupled Data/Control):
+ * This core is designed as a "dumb" slave permutation block. It possesses strictly
+ * zero knowledge of higher-level cryptographic protocols, AXI4-Stream handshaking,
+ * padding rules, or the difference between AEAD and Hashing. It relies entirely
+ * on external protocol-specific orchestrators (FSMs) to feed it data, dictate
+ * the number of rounds, and trigger the permutation.
+ *
+ * Implementation Details:
+ * - Datapath Pipeline: Instantiates the three combinatorial layers of the Ascon
+ * round logic (p_C -> p_S -> p_L).
+ * - Control FSM: Built using a robust 4-process methodology (State Register,
+ * Next State Logic, Output Decoder, Action Logic) to ensure glitch-free
+ * synthesis and predictable timing.
+ * - Memory Mapping: The 320-bit internal state is addressable as five distinct
+ * 64-bit words via `word_sel_i`, allowing external controllers to overwrite
+ * or XOR specific lanes (S_0 ... S_4) independently.
+ * - Round Indexing: Implements a 0-indexed round counter (`rnd_cnt`). For the
+ * 8-round permutation (p^8), the required mathematical suffix offset (+4) is
+ * delegated to the `constant_addition_layer` module to extract the correct
+ * round constants.
+ *
+ * Ref: NIST SP 800-232, Section 3
  */
 
 import ascon_pkg::*;
@@ -19,7 +44,7 @@ module ascon_core (
     // Read/Write Word Address
     input   logic [2:0]     word_sel_i,
 
-    // Data I/SO Control
+    // Data I/O Control
     input   ascon_word_t    data_i,
     input   logic           write_en_i,
     input   logic           xor_en_i,
@@ -37,13 +62,13 @@ module ascon_core (
         STATE_PERM
     } state_t;
     state_t state = STATE_IDLE, next_state;
-    
+
     rnd_t rnd_cnt = 0;
     ascon_state_t state_array = 320'd0;
-    
+
     // Permutation Layers Output
     ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
-    
+
     // Permutation Layers Instances
     constant_addition_layer const_add(
         .round_config_i(round_config_i),
