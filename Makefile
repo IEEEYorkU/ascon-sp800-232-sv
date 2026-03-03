@@ -31,10 +31,10 @@ VECTOR_FILE := verif/test_vectors/ascon_vectors.txt
 # Default target
 all: run_all
 
-.PHONY: run_all clean run_%
+.PHONY: run_all clean run_% FORCE
 
 # Always regenerate vectors before simulation
-$(VECTOR_FILE):
+$(VECTOR_FILE): FORCE
 	@echo "=== Generating Python test vectors ==="
 	$(PYTHON) $(PY_SCRIPT)
 
