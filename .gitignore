@@ -3,11 +3,7 @@ transcript
 *.vcd
 *.macro
 *.log
-# Ignore all txt files
 *.txt
-# But allow ALL official test vectors
-!verif/test_vectors/
-!verif/test_vectors/*.txt
 
 #MacOS Metadata
 .DS_Store
