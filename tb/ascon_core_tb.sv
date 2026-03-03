@@ -1,6 +1,6 @@
 /*
  * Module Name: ascon_core_tb.sv
- * Aurthor(s): Arthur Sabadini, Artin Kiany
+ * Aurthor(s): Arthur Sabadini, Artin Kiany, Kiet Le
  * Description: Testbench for ascon_core.sv
  *
  */
@@ -85,13 +85,16 @@ module ascon_core_tb;
 
     property write_successful_on_idle;
         @(posedge clk)
-        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |=> (dut.state_array[$past(word_sel_i)] == $past(data_i));
+        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |=> (
+            dut.state_array[$past(word_sel_i)] == $past(data_i)
+        );
     endproperty
 
     property xor_write_sucessful_on_idle;
         @(posedge clk)
         ((dut.state == 1'b0) & write_en_i & xor_en_i) |=> (
-            dut.state_array[$past(word_sel_i)] == ($past(dut.state_array[word_sel_i]) ^ $past(data_i))
+                dut.state_array[$past(word_sel_i)] ==
+                ($past(dut.state_array[word_sel_i]) ^ $past(data_i))
         );
     endproperty
 
@@ -140,10 +143,10 @@ module ascon_core_tb;
         // Exhaustive Tests
         $display("Exhaustive Random Input Test...");
         round_config_i = 1'd1;
-        
+
         // Synchronize to the clock before starting
         @(negedge clk);
-        
+
         for (int i = 0; i < max_tests; i++) begin
             // Generating random input
             rand_array(test_data_i);
@@ -159,7 +162,7 @@ module ascon_core_tb;
             @(negedge clk);
             write_en_i = 0;
 
-            // FIXED: Synchronous start permutation pulse
+            // Synchronous start permutation pulse
             word_sel_i = 0;
             start_perm_i = 1;
             @(negedge clk);
@@ -168,7 +171,7 @@ module ascon_core_tb;
             // Wait for permutations to finish
             wait(ready_o == 1);
 
-            // FIXED: Synchronous Read
+            // Synchronous Read
             for(int w = 0; w < NUM_WORDS; w++) begin
                 @(negedge clk);
                 word_sel_i = w;
@@ -217,20 +220,20 @@ module ascon_core_tb;
             @(negedge clk);
             write_en_i = 0;
 
-            // FIXED: Synchronous start permutation pulse
-            word_sel_i = 0;      
-            start_perm_i = 1;    
-            @(negedge clk); 
+            // Synchronous start permutation pulse
+            word_sel_i = 0;
+            start_perm_i = 1;
+            @(negedge clk);
             start_perm_i = 0;
 
             // Wait for permutations to finish
             wait(ready_o == 1);
 
-            // FIXED: Synchronous Read
+            // Synchronous Read
             for(int w = 0; w < NUM_WORDS; w++) begin
                 @(negedge clk);
                 word_sel_i = w;
-                @(posedge clk); 
+                @(posedge clk);
                 state_data_o[w] = data_o;
             end
 
