@@ -1,6 +1,6 @@
 /*
  * Module Name: ascon_core_tb.sv
- * Aurthor(s): Arthur Sabadini
+ * Aurthor(s): Arthur Sabadini, Artin Kiany
  * Description: Testbench for ascon_core.sv
  *
  */
@@ -41,6 +41,16 @@ module ascon_core_tb;
     ascon_word_t test_data_i;
     ascon_word_t test_data_o;
     ascon_state_t state_data_o;
+
+
+    // Python Golden File Variables
+    int fd;
+    int r;
+    logic [63:0] temp_word;
+    int round_config_file;
+    ascon_state_t input_state_file;
+    ascon_state_t expected_state_file;
+
 
     ascon_core dut(
         .clk(clk), .rst(rst),
@@ -163,6 +173,60 @@ module ascon_core_tb;
             #2;
             check_core_output(test_data_o, state_data_o);
         end
+
+        // ----------------------------
+        // Python Golden Vector Test
+        // ----------------------------
+
+        $display("Running Python golden vector tests...");
+
+        fd = $fopen("verif/test_vectors/ascon_vectors.txt", "r");
+        if(fd == 0) $fatal("Cannot open ascon_vectors.txt");
+
+        while(!$feof(fd)) begin
+
+            // Read round config
+            r = $fscanf(fd, "%d\n", round_config_file);
+            round_config_i = round_config_file;
+
+            // Read input state
+            for(int i=0;i<NUM_WORDS;i++) begin
+                r = $fscanf(fd, "%h\n", temp_word);
+                input_state_file[i] = temp_word;
+            end
+
+            // Read expected state
+            for(int i=0;i<NUM_WORDS;i++) begin
+                r = $fscanf(fd, "%h\n", temp_word);
+                expected_state_file[i] = temp_word;
+            end
+
+            // Write to DUT
+            for(word_sel_i=0; word_sel_i<NUM_WORDS; word_sel_i++) begin
+                #4;
+                data_i = input_state_file[word_sel_i];
+                write_en_i = 1;
+                #4;
+                write_en_i = 0;
+            end
+
+            word_sel_i = 0;      // Reset index
+            start_perm_i = 1;    // Starting Permutation
+            #4 start_perm_i = 0;
+
+            // Wait for permutations to finish
+            wait(ready_o == 1);
+
+            // Read back
+            for(word_sel_i=0; word_sel_i<NUM_WORDS; word_sel_i++) begin
+                #4
+                state_data_o[word_sel_i] = data_o;
+            end
+
+            check_core_output(expected_state_file, state_data_o);
+        end
+
+        $display("All tests completed.");
 
         $finish;
     end
