@@ -38,8 +38,8 @@ module ascon_core_tb;
     // ----------------------------
     // Test signal
     // ----------------------------
-    ascon_word_t test_data_i;
-    ascon_word_t test_data_o;
+    ascon_state_t test_data_i;
+    ascon_state_t test_data_o;
     ascon_state_t state_data_o;
 
 
