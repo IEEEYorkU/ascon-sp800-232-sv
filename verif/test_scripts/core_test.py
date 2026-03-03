@@ -1,4 +1,5 @@
 import random
+import os
 
 ASCON_RC = [
     0xf0, 0xe1, 0xd2, 0xc3,
@@ -159,4 +160,10 @@ def generate_test_vectors(filename="ascon_vectors.txt", num_tests=20):
                     f.write(f"{w:016x}\n")
 
 if __name__ == "__main__":
-    generate_test_vectors("../test_vectors/ascon_vectors.txt", num_tests=50)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, "..", "test_vectors", "ascon_vectors.txt")
+    output_path = os.path.abspath(output_path)
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    generate_test_vectors(output_path, num_tests=25)
