@@ -75,7 +75,7 @@ module ascon_core_tb;
 
     property not_ready_on_start;
         @(posedge clk)
-        start_perm_i |-> !ready_o;
+        start_perm_i |=> !ready_o;
     endproperty
 
     property data_stable_when_ready;
