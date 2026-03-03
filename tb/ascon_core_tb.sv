@@ -152,7 +152,7 @@ module ascon_core_tb;
             rand_array(test_data_i);
             test_data_o = ascon_perm(round_config_i, test_data_i);
 
-            // Synchronous 1-cycle write loop
+            // Writing input (Synchronous 1-cycle write loop)
             for(int w = 0; w < NUM_WORDS; w++) begin
                 @(negedge clk);
                 word_sel_i = w;
@@ -171,7 +171,7 @@ module ascon_core_tb;
             // Wait for permutations to finish
             wait(ready_o == 1);
 
-            // Synchronous Read
+            // Reading full state output (Synchronous Read)
             for(int w = 0; w < NUM_WORDS; w++) begin
                 @(negedge clk);
                 word_sel_i = w;
@@ -210,7 +210,7 @@ module ascon_core_tb;
                 expected_state_file[i] = temp_word;
             end
 
-            // Synchronous 1-cycle write loop
+            // Write to DUT (Synchronous 1-cycle write loop)
             for(int w = 0; w < NUM_WORDS; w++) begin
                 @(negedge clk);
                 word_sel_i = w;
@@ -229,7 +229,7 @@ module ascon_core_tb;
             // Wait for permutations to finish
             wait(ready_o == 1);
 
-            // Synchronous Read
+            // Read back (Synchronous Read)
             for(int w = 0; w < NUM_WORDS; w++) begin
                 @(negedge clk);
                 word_sel_i = w;
