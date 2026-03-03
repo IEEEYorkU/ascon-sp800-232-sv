@@ -87,12 +87,12 @@ module ascon_core_tb;
 
     property write_successful_on_idle;
         @(posedge clk)
-        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |-> (dut.state_array[word_sel_i] == data_i);
+        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |=> (dut.state_array[word_sel_i] == data_i);
     endproperty
 
     property xor_write_sucessful_on_idle;
         @(posedge clk)
-        ((dut.state == 1'b0) & write_en_i & xor_en_i) |-> (
+        ((dut.state == 1'b0) & write_en_i & xor_en_i) |=> (
             dut.state_array[word_sel_i] == dut.state_array[word_sel_i] ^ data_i
         );
     endproperty
