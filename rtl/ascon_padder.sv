@@ -83,18 +83,112 @@ module ascon_padder (
     // =======================================================================
     // INTERNAL LOGIC DECLARATIONS
     // =======================================================================
-
-    // State machine definition for tracking rate alignment (e.g., 64 vs 128 bit blocks)
-    // and generating extra padding cycles if a block is perfectly aligned.
     typedef enum logic [1:0] {
-        STATE_IDLE_PASS = 2'b00, // Passing data through normally
-        STATE_PAD_WORD1 = 2'b01, // Padding the first word of a block
-        STATE_PAD_WORD2 = 2'b10  // Generating the second empty padded word (AEAD only)
+        STATE_IDLE_PASS = 2'b00, 
+        STATE_PAD_WORD2 = 2'b10  
     } padder_state_t;
 
     padder_state_t state, next_state;
 
-    // Combinational logic for the masked data output
+    //internal tracking for the 128 bit (2 word) block alignment
+    // word_count = 0: First 64 bits of a block
+    // word_count = 1: Second 64 bits of a block
+    logic word_count_reg, word_count_next;
+
+    //determine if the current TUSER group requires padding or not
+    logic is_padding_group; // (AD, PT, MSG, Z)
+    assign is_padding_group = (s_axis_tuser_i == TUSER_AD ||
+                               s_axis_tuser_i == TUSER_PT ||
+                               s_axis_tuser_i == TUSER_MSG ||
+                               s_axis_tuser_i == TUSER_Z);
+
+    // -----------------------------------------------------------------------
+    // 1. Padding Generator (The 1000...0 Bit Injection Logic)
+    // -----------------------------------------------------------------------
     ascon_word_t masked_data;
 
+    always_comb begin
+        masked_data = s_axis_tdata_i; // default, pass through data unmodified
+
+        //search for the first 0 bit in the TKEEP to place the 0x80(1000 0000) padding byte
+        //if TKEEP 8'hFF, the 0x80 is NOT placed (it goes in the next word)
+
+        for(int i = 0; i < 8; i++) begin
+            if (s_axis_tkeep_i[i] == 1'b0) begin
+                masked_data[i*8 +: 8] = 8'h80; //place the 0x80 padding byte at the correct position in the data word
+                for(int j = i+1; j < 8; j++) begin
+                    masked_data[j*8 +: 8] = 8'h00; //zero out the remaining bytes after the padding byte
+                end
+                break;
+            end
+        end
+    end
+
+    // -----------------------------------------------------------------------
+    // 2. State Machine Logic
+    // -----------------------------------------------------------------------
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state <= STATE_IDLE_PASS;
+            word_count_reg <= 1'b0;
+        end else begin
+            state <= next_state;
+            word_count_reg <= word_count_next;
+        end
+    end
+
+    always_comb begin
+        // Default values for outputs and next state
+        next_state = state;
+        word_count_next = word_count_reg;
+
+        s_axis_tready_o = padded_tready_i;
+        padded_tvalid_o = s_axis_tvalid_i;
+        padded_tdata_o = s_axis_tdata_i;
+        padded_tkeep_o = s_axis_tkeep_i;
+        padded_tuser_o = s_axis_tuser_i;
+        padded_tlast_o = s_axis_tlast_i;
+
+        case (state)
+            STATE_IDLE_PASS: begin
+                if(s_axis_tvalid_i && padded_tready_i) begin
+                    if (is_padding_group) begin
+                        padded_tkeep_o = 8'hFF; //force a full word for downstream FSM
+                        if(s_axis_tlast_i) begin
+                            if(mode_i == ASCON_AEAD128 && word_count_reg == 1'b0 && s_axis_tkeep_i == 8'hFF) begin
+                                //Edge Case: AEAD block ends perfectly on word 0
+                                //we must generate an extra word for the padding byte
+
+                                padded_tlast_o = 1'b0; 
+                                next_state = STATE_PAD_WORD2; //go to the state that generates the second padding word
+                            end else begin
+                                padded_tdata_o = masked_data; //apply padding to the last word of the block
+                                word_count_next = 1'b0;
+                            end
+                        end else begin
+                            word_count_next = (mode_i == ASCON_AEAD128) ? ~word_count_reg : 1'b0; //toggle word count for AEAD, stay at 0 for Hash
+                            //TODO: Verify this logiv
+                        end
+                    end
+                end
+            end
+
+            STATE_PAD_WORD2: begin
+                //create the "artificial" second word of the 128 bit block
+                s_axis_tready_o = 1'b0;
+                padded_tvalid_o = 1'b1;
+                padded_tdata_o = 64'h8000_0000_0000_0000; //64'h0000_0000_0000_0000 //TODO remove :)
+                padded_tkeep_o = 8'hFF; //force full word
+                padded_tlast_o = 1'b1; //assert TLAST to indicate the block is now full
+
+                if (padded_tready_i) begin
+                    next_state = STATE_IDLE_PASS; //return to idle after outputting the padding word
+                    word_count_next = 1'b0; //reset word count for the next block
+                end
+            end
+
+            default: next_state = STATE_IDLE_PASS;
+        endcase
+    end
 endmodule
