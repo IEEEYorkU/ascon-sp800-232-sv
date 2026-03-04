@@ -31,7 +31,7 @@ all: run_all
 # Loop through testbenches
 run_all:
 	@for tb in $(TESTBENCHES); do \
-		$(MAKE) run_$$tb; \
+		$(MAKE) run_$$tb || exit 1; \
 	done
 
 # Rule for each testbench
@@ -53,10 +53,14 @@ else
 	# Pass the filelist natively with -f
 	vlog -work work -sv +incdir+rtl -f rtl.f tb/$*.sv
 
-	@echo 'vcd file "$*.vcd"' > run_$*.macro
+	# TCL commands to force a failure exit code if the simulation crashes
+	@echo 'onerror {quit -f -code 1}' > run_$*.macro
+	@echo 'onbreak {quit -f -code 1}' >> run_$*.macro
+
+	@echo 'vcd file "$*.vcd"' >> run_$*.macro
 	@echo 'vcd add -r /$*/*' >> run_$*.macro
 	@echo 'run -all' >> run_$*.macro
-	@echo 'quit' >> run_$*.macro
+	@echo 'quit -f' >> run_$*.macro
 	vsim -c -do run_$*.macro work.$*
 	rm -f run_$*.macro
 endif
