@@ -57,7 +57,74 @@ module hash_fsm (
     // =======================================================================
     // FSM State Declarations & Logic
     // =======================================================================
+    typedef enum logic [6:0] {
+        IDLE    = 7'b0000001,
+        INIT    = 7'b0000010,
+        ABSORB  = 7'b0000100,
+        SQUEEZE = 7'b0001000
+    } hash_state_e;
+
+    hash_state_e State, NextState;
 
     // (State machine logic goes here)
+
+    // =======================================================================
+    // State register
+    // =======================================================================
+    always_ff @(posedge clk) begin
+        if (rst)
+            State <= IDLE;
+        else
+            State <= NextState;
+    end
+
+    // =======================================================================
+    // Next state + outputs logic
+    // =======================================================================
+    always_comb begin
+        // Defaults
+        NextState = State;
+
+        // =================================
+        // State actions / transitions
+        // =================================
+        unique case (State)
+
+            IDLE: begin
+                busy_o = 1'b0;
+                done_o = 1'b0;
+
+                // wait for start
+                if (start_i) begin
+                    NextState = INIT;
+                end
+            end
+
+            INIT: begin
+                busy_o = 1'b1;
+
+                // TODO:
+                // NextState = ABSORB;
+            end
+
+            ABSORB: begin
+                busy_o = 1'b1;
+
+                // TODO:
+                // NextState = SQUEEZE;
+            end
+
+            SQUEEZE: begin
+                busy_o = 1'b1;
+
+                // TODO:
+                // NextState = IDLE;
+            end
+
+            default: begin
+                NextState = IDLE;
+            end
+        endcase
+    end
 
 endmodule
