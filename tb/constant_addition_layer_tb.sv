@@ -23,6 +23,7 @@ module constant_addition_layer_tb;
 
     // Error Tracking
     int error_count = 0;
+    int prev_error_count = 0; // Variable to track errors per test
 
     constant_addition_layer dut (
         .round_config_i(round_config_i),
@@ -50,7 +51,7 @@ module constant_addition_layer_tb;
             $write("."); // Print dot for progress
         else begin
             error_count++;
-            $error("\n[ERROR] x0, x1, x3, or x4 changed for Round: %0d!\nExpected: %16x, %16x, %16x, %16x\nGot:      %16x, %16x, %16x, %16x", 
+            $error("\n[ERROR] x0, x1, x3, or x4 changed for Round: %0d!\nExpected: %16x, %16x, %16x, %16x\nGot:      %16x, %16x, %16x, %16x",
                     rnd, exp[0], exp[1], exp[3], exp[4], dut_out[0], dut_out[1], dut_out[3], dut_out[4]);
         end
     endtask
@@ -74,9 +75,11 @@ module constant_addition_layer_tb;
         end
     endtask
 
-    // Creates a random round number to aid in verifying correctness of hardware.
-    task automatic rand_rnd(output rnd_t test_rnd);
-        test_rnd = rnd_t'($urandom_range(0, 12));
+    task automatic rand_rnd(input logic config_i, output rnd_t test_rnd);
+        if (config_i == 1'b1)
+            test_rnd = rnd_t'($urandom_range(0, 11)); // Max 12 rounds
+        else
+            test_rnd = rnd_t'($urandom_range(0, 7));  // Max 8 rounds
     endtask
 
     // Generates a random input state array.
@@ -103,6 +106,7 @@ module constant_addition_layer_tb;
 
         // Test 1 All Zero Input Array
         $display("\nTest 1: All Zero Input...");
+        prev_error_count = error_count; // Snapshot errors before test
         test_array_i = '0;
         state_array_i = test_array_i;
         round_config_i = 1'd1;
@@ -114,15 +118,17 @@ module constant_addition_layer_tb;
             check_unchanged(test_rnd_i, test_array_i, state_array_o);
             check_output(test_rnd_i, test_array_i, state_array_o);
         end
+        if (error_count == prev_error_count) $display("\nSUCCESS: Test 1 Passed!");
 
         #1;
 
         // Test 2 Exhaustive Cases
         $display("\n\nTest 2: Exhaustive Random Input...");
+        prev_error_count = error_count; // Snapshot errors before test
         round_config_i = 1'd1;
         for (int i = 0; i < max_tests; i++) begin
             #1;
-            rand_rnd(test_rnd_i);
+            rand_rnd(round_config_i, test_rnd_i); // Pass config to randomizer
             rand_array(test_array_i);
             state_array_i = test_array_i;
             rnd_i = test_rnd_i;
@@ -130,15 +136,18 @@ module constant_addition_layer_tb;
             check_unchanged(test_rnd_i, test_array_i, state_array_o);
             check_output(test_rnd_i, test_array_i, state_array_o);
         end
+        if (error_count == prev_error_count) $display("\nSUCCESS: Test 2 Passed!");
 
         #1;
 
         // Test 3 Round 8 All Zeros
         $display("\n\nTest 3: All Zero Input (Config 0)...");
+        prev_error_count = error_count; // Snapshot errors before test
         test_array_i = '0;
         state_array_i = test_array_i;
         round_config_i = 1'd0;
-        for (int i = 0; i < 12; i++) begin
+        // Only loop up to 8 rounds (0 through 7) for config 0
+        for (int i = 0; i < 8; i++) begin
             #1;
             test_rnd_i = rnd_t'(i);
             rnd_i = test_rnd_i;
@@ -146,15 +155,17 @@ module constant_addition_layer_tb;
             check_unchanged(test_rnd_i + 4, test_array_i, state_array_o);
             check_output(test_rnd_i + 4, test_array_i, state_array_o);
         end
+        if (error_count == prev_error_count) $display("\nSUCCESS: Test 3 Passed!");
 
         #1;
 
         // Test 4 Round 8 Exhaustive Cases
         $display("\n\nTest 4: Exhaustive Random Input (Config 0)...");
+        prev_error_count = error_count; // Snapshot errors before test
         round_config_i = 0;
         for (int i = 0; i < max_tests; i++) begin
             #1;
-            rand_rnd(test_rnd_i);
+            rand_rnd(round_config_i, test_rnd_i); // Pass config to randomizer
             rand_array(test_array_i);
             state_array_i = test_array_i;
             rnd_i = test_rnd_i;
@@ -162,6 +173,7 @@ module constant_addition_layer_tb;
             check_unchanged(test_rnd_i + 4, test_array_i, state_array_o);
             check_output(test_rnd_i + 4, test_array_i, state_array_o);
         end
+        if (error_count == prev_error_count) $display("\nSUCCESS: Test 4 Passed!");
 
         // Final Evaluation
         if (error_count > 0) begin
