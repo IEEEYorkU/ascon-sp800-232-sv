@@ -1,8 +1,34 @@
 /*
  * Module Name: ascon_core
- * Author(s): Kiet Le
+ * Author(s):   Kiet Le, Arthur Sabadini
  * Description:
+ * The central mathematical engine ("The Muscle") for the Ascon Cryptographic
+ * Accelerator. This module encapsulates the 320-bit Ascon state and iteratively
+ * executes the three permutation layers (Constant Addition, Substitution, and
+ * Linear Diffusion) for a configurable number of rounds.
  *
+ * Design Philosophy (Decoupled Data/Control):
+ * This core is designed as a "dumb" slave permutation block. It possesses strictly
+ * zero knowledge of higher-level cryptographic protocols, AXI4-Stream handshaking,
+ * padding rules, or the difference between AEAD and Hashing. It relies entirely
+ * on external protocol-specific orchestrators (FSMs) to feed it data, dictate
+ * the number of rounds, and trigger the permutation.
+ *
+ * Implementation Details:
+ * - Datapath Pipeline: Instantiates the three combinatorial layers of the Ascon
+ * round logic (p_C -> p_S -> p_L).
+ * - Control FSM: Built using a robust 4-process methodology (State Register,
+ * Next State Logic, Output Decoder, Action Logic) to ensure glitch-free
+ * synthesis and predictable timing.
+ * - Memory Mapping: The 320-bit internal state is addressable as five distinct
+ * 64-bit words via `word_sel_i`, allowing external controllers to overwrite
+ * or XOR specific lanes (S_0 ... S_4) independently.
+ * - Round Indexing: Implements a 0-indexed round counter (`rnd_cnt`). For the
+ * 8-round permutation (p^8), the required mathematical suffix offset (+4) is
+ * delegated to the `constant_addition_layer` module to extract the correct
+ * round constants.
+ *
+ * Ref: NIST SP 800-232, Section 3
  */
 
 import ascon_pkg::*;
@@ -29,5 +55,123 @@ module ascon_core (
     // Permutation Complete
     output  logic           ready_o
 );
+
+    // FSM States
+    typedef enum logic [0:0] {
+        STATE_IDLE,
+        STATE_PERM
+    } state_t;
+    state_t state = STATE_IDLE, next_state;
+
+    rnd_t rnd_cnt = 0;
+    ascon_state_t state_array = 320'd0;
+
+    // Permutation Layers Output
+    ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
+
+    // Permutation Layers Instances
+    constant_addition_layer const_add(
+        .round_config_i(round_config_i),
+        .rnd_i(rnd_cnt),
+        .state_array_i(state_array),
+        .state_array_o(addition_state_array_o)
+    );
+    substitution_layer substitution(
+        .state_array_i(addition_state_array_o),
+        .state_array_o(substitution_state_array_o)
+    );
+    linear_diffusion_layer diffusion(
+        .state_array_i(substitution_state_array_o),
+        .state_array_o(diffusion_state_array_o)
+    );
+
+    // FSM Control Process 1: State Register (Sequential)
+    // ----------------------------------------------------------
+    always_ff @(posedge clk or posedge rst) begin
+        if(rst) begin
+            state <= STATE_IDLE;
+        end else begin
+            state <= next_state;
+        end
+    end
+
+    // FSM Control Process 2: Next State Decoder (Combinational)
+    // ----------------------------------------------------------
+    always_comb begin
+        next_state = state;
+
+        case(state)
+            STATE_IDLE: begin
+                if(start_perm_i) begin
+                    next_state = STATE_PERM;
+                end else begin
+                    next_state = STATE_IDLE;
+                end
+            end
+
+            STATE_PERM: begin
+                if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
+                    next_state = STATE_PERM;
+                end else begin
+                    next_state = STATE_IDLE;
+                end
+            end
+
+            default: begin
+                next_state = STATE_IDLE;
+            end
+        endcase
+    end
+
+    // FSM Control Process 3: Action Decoder (Combinational)
+    // ----------------------------------------------------------
+    always_comb begin
+        ready_o = 1'd0;
+        data_o = state_array[word_sel_i];
+
+        case(state)
+            STATE_IDLE: begin
+                ready_o = 1'd1;
+            end
+
+            default: begin
+                ready_o = 1'd0;
+            end
+        endcase
+    end
+
+    // FSM Control Process 4: Action Logic (Sequential)
+    // ----------------------------------------------------------
+    always_ff @(posedge clk or posedge rst) begin
+        if(rst) begin
+            rnd_cnt <= 4'd0;
+            state_array <= 320'd0;
+        end else begin
+            unique case (state)
+                STATE_IDLE: begin
+                    if(write_en_i) begin
+                        if(xor_en_i) begin
+                            state_array[word_sel_i] <= data_i ^ state_array[word_sel_i];
+                        end else begin
+                            state_array[word_sel_i] <= data_i;
+                        end
+                    end
+                end
+
+                STATE_PERM: begin
+                    state_array <= diffusion_state_array_o;
+
+                    // Prevent counter from going out of bounds for
+                    // constant_addition_layer.AsconRcLut
+                    if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
+                        rnd_cnt <= rnd_cnt + 4'd1;
+                    end else begin
+                        // Sync counter reset with ready_o signal
+                        rnd_cnt <= 4'd0;
+                    end
+                end
+            endcase
+        end
+    end
 
 endmodule

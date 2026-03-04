@@ -23,10 +23,20 @@ SIM ?= vsim
 # --trace:  Enable VCD tracing
 VERILATOR_FLAGS = --binary -j 0 --timing --trace -Wall -Wno-fatal
 
+# Python vector generation
+PYTHON      ?= python3
+PY_SCRIPT   := verif/test_scripts/core_test.py
+VECTOR_FILE := verif/test_vectors/ascon_vectors.txt
+
 # Default target
 all: run_all
 
-.PHONY: run_all clean run_%
+.PHONY: run_all clean run_% FORCE
+
+# Always regenerate vectors before simulation
+$(VECTOR_FILE): FORCE
+	@echo "=== Generating Python test vectors ==="
+	$(PYTHON) $(PY_SCRIPT)
 
 # Loop through testbenches
 run_all:
@@ -35,7 +45,7 @@ run_all:
 	done
 
 # Rule for each testbench
-run_%:
+run_%: $(VECTOR_FILE)
 	@echo "=== Running $* with $(SIM) ==="
 ifeq ($(SIM), verilator)
 	# --- VERILATOR FLOW ---
