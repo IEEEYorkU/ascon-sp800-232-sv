@@ -61,7 +61,15 @@ else
 	@echo 'vcd add -r /$*/*' >> run_$*.macro
 	@echo 'run -all' >> run_$*.macro
 	@echo 'quit -f' >> run_$*.macro
+
 	vsim -c -do run_$*.macro work.$*
+
+	# The CI Catch: Check the transcript for errors/fatals and force an exit 1 if found
+	@if grep -q -E "\*\* Fatal|\*\* Error" transcript; then \
+		echo "[CI CATCH] ModelSim hit an Error or Fatal. Failing the build!"; \
+		exit 1; \
+	fi
+
 	rm -f run_$*.macro
 endif
 
