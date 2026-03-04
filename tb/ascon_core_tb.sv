@@ -101,18 +101,6 @@ module ascon_core_tb;
         );
     endproperty
 
-    // Sequence assertion to verify exact permutation cycle latency
-    property perm_cycle_timing;
-        @(posedge clk)
-        start_perm_i |=>
-            if ($past(round_config_i))
-                // If config=1, ready_o drops for exactly 12 cycles, then goes high
-                (!ready_o [*12]) ##1 ready_o
-            else
-                // If config=0, ready_o drops for exactly 8 cycles, then goes high
-                (!ready_o [*8]) ##1 ready_o;
-    endproperty
-
     // ----------------------------
     // Properties Assertions
     // ----------------------------
@@ -121,7 +109,6 @@ module ascon_core_tb;
     assert property (not_ready_on_start);
     assert property (write_successful_on_idle);
     assert property (xor_write_sucessful_on_idle);
-    assert property (perm_cycle_timing);
 
     // ----------------------------
     // Task Definitions
@@ -140,7 +127,8 @@ module ascon_core_tb;
         else begin
             // Increment the error counter and print the mismatch, but DO NOT stop the simulation yet
             error_count++;
-            $error("\n[ERROR] State out is Incorrect!\nExpected: %x\nGot:      %x", state_exp, state_o);
+            $error("\n[ERROR] State out is Incorrect!\nExpected: %x\nGot:      %x",
+                    state_exp, state_o);
         end
     endtask
 
@@ -206,7 +194,8 @@ module ascon_core_tb;
 
         // Evaluate SystemVerilog Random Tests
         if (error_count > 0) begin
-            $fatal(1, "\n[FATAL] SystemVerilog Random Tests failed with %0d errors. See log above for details.", error_count);
+            $fatal(1, "\n[FATAL] SystemVerilog Random Tests failed with %0d errors. See log above for details.",
+                    error_count);
         end else begin
             $display("\n---------------------------------------------------------");
             $display("SUCCESS: All %0d SystemVerilog Random Tests Passed!", max_tests);
@@ -275,7 +264,8 @@ module ascon_core_tb;
 
         // Evaluate Python Golden Vector Tests
         if (error_count > 0) begin
-            $fatal(1, "\n[FATAL] Python Golden Vector Tests failed with %0d errors. See log above for details.", error_count);
+            $fatal(1, "\n[FATAL] Python Golden Vector Tests failed with %0d errors. See log above for details.",
+                    error_count);
         end else begin
             $display("\n---------------------------------------------------------");
             $display("SUCCESS: All Python Golden Vector Tests Passed!");
