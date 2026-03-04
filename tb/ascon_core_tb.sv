@@ -50,6 +50,9 @@ module ascon_core_tb;
     ascon_state_t input_state_file;
     ascon_state_t expected_state_file;
 
+    // Error Tracking
+    int error_count = 0;
+
     ascon_core dut(
         .clk(clk), .rst(rst),
         .start_perm_i(start_perm_i),
@@ -98,6 +101,18 @@ module ascon_core_tb;
         );
     endproperty
 
+    // Sequence assertion to verify exact permutation cycle latency
+    property perm_cycle_timing;
+        @(posedge clk)
+        start_perm_i |=>
+            if ($past(round_config_i))
+                // If config=1, ready_o drops for exactly 12 cycles, then goes high
+                (!ready_o [*12]) ##1 ready_o
+            else
+                // If config=0, ready_o drops for exactly 8 cycles, then goes high
+                (!ready_o [*8]) ##1 ready_o;
+    endproperty
+
     // ----------------------------
     // Properties Assertions
     // ----------------------------
@@ -106,6 +121,7 @@ module ascon_core_tb;
     assert property (not_ready_on_start);
     assert property (write_successful_on_idle);
     assert property (xor_write_sucessful_on_idle);
+    assert property (perm_cycle_timing);
 
     // ----------------------------
     // Task Definitions
@@ -119,9 +135,13 @@ module ascon_core_tb;
         assert(
             state_o == state_exp
         )
-            $display("Success. State out is State Expected.");
-        else
-            $error("Failed. State out is Incorrect.");
+            // Print a dot to show progress without flooding the console
+            $write(".");
+        else begin
+            // Increment the error counter and print the mismatch, but DO NOT stop the simulation yet
+            error_count++;
+            $error("\n[ERROR] State out is Incorrect!\nExpected: %x\nGot:      %x", state_exp, state_o);
+        end
     endtask
 
     // ----------------------------
@@ -139,6 +159,7 @@ module ascon_core_tb;
         write_en_i = 0;
         xor_en_i = 0;
         data_i = 320'd0;
+        error_count = 0;
 
         // Exhaustive Tests
         $display("Exhaustive Random Input Test...");
@@ -183,14 +204,26 @@ module ascon_core_tb;
             check_core_output(test_data_o, state_data_o);
         end
 
+        // Evaluate SystemVerilog Random Tests
+        if (error_count > 0) begin
+            $fatal(1, "\n[FATAL] SystemVerilog Random Tests failed with %0d errors. See log above for details.", error_count);
+        end else begin
+            $display("\n---------------------------------------------------------");
+            $display("SUCCESS: All %0d SystemVerilog Random Tests Passed!", max_tests);
+            $display("---------------------------------------------------------");
+        end
+
         // ----------------------------
         // Python Golden Vector Test
         // ----------------------------
 
-        $display("Running Python golden vector tests...");
+        // Reset the error counter before starting the next suite
+        error_count = 0;
+
+        $display("\nRunning Python golden vector tests...");
 
         fd = $fopen("verif/test_vectors/ascon_vectors.txt", "r");
-        if(fd == 0) $fatal("Cannot open ascon_vectors.txt");
+        if(fd == 0) $fatal(1, "Cannot open ascon_vectors.txt");
 
         while(!$feof(fd)) begin
 
@@ -240,7 +273,14 @@ module ascon_core_tb;
             check_core_output(expected_state_file, state_data_o);
         end
 
-        $display("All tests completed.");
+        // Evaluate Python Golden Vector Tests
+        if (error_count > 0) begin
+            $fatal(1, "\n[FATAL] Python Golden Vector Tests failed with %0d errors. See log above for details.", error_count);
+        end else begin
+            $display("\n---------------------------------------------------------");
+            $display("SUCCESS: All Python Golden Vector Tests Passed!");
+            $display("---------------------------------------------------------");
+        end
 
         $finish;
     end
