@@ -1,6 +1,6 @@
 /*
  * Module Name: ascon_core_tb.sv
- * Aurthor(s): Arthur Sabadini, Artin Kiany
+ * Aurthor(s): Arthur Sabadini, Artin Kiany, Kiet Le
  * Description: Testbench for ascon_core.sv
  *
  */
@@ -42,7 +42,6 @@ module ascon_core_tb;
     ascon_state_t test_data_o;
     ascon_state_t state_data_o;
 
-
     // Python Golden File Variables
     int fd;
     int r;
@@ -50,7 +49,6 @@ module ascon_core_tb;
     int round_config_file;
     ascon_state_t input_state_file;
     ascon_state_t expected_state_file;
-
 
     ascon_core dut(
         .clk(clk), .rst(rst),
@@ -77,23 +75,26 @@ module ascon_core_tb;
 
     property not_ready_on_start;
         @(posedge clk)
-        start_perm_i |-> !ready_o;
+        start_perm_i |=> !ready_o;
     endproperty
 
     property data_stable_when_ready;
         @(posedge clk)
-        (ready_o & $stable(word_sel_i) & !$past(write_en_i)) |-> $stable(data_o);
+        (ready_o & $past(ready_o) & $stable(word_sel_i) & !$past(write_en_i)) |-> $stable(data_o);
     endproperty
 
     property write_successful_on_idle;
         @(posedge clk)
-        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |=> (dut.state_array[word_sel_i] == data_i);
+        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |=> (
+            dut.state_array[$past(word_sel_i)] == $past(data_i)
+        );
     endproperty
 
     property xor_write_sucessful_on_idle;
         @(posedge clk)
         ((dut.state == 1'b0) & write_en_i & xor_en_i) |=> (
-            dut.state_array[word_sel_i] == dut.state_array[word_sel_i] ^ data_i
+                dut.state_array[$past(word_sel_i)] ==
+                ($past(dut.state_array[word_sel_i]) ^ $past(data_i))
         );
     endproperty
 
@@ -118,7 +119,7 @@ module ascon_core_tb;
         assert(
             state_o == state_exp
         )
-            $display("Sucess. State out is State Expected.");
+            $display("Success. State out is State Expected.");
         else
             $error("Failed. State out is Incorrect.");
     endtask
@@ -142,35 +143,43 @@ module ascon_core_tb;
         // Exhaustive Tests
         $display("Exhaustive Random Input Test...");
         round_config_i = 1'd1;
+
+        // Synchronize to the clock before starting
+        @(negedge clk);
+
         for (int i = 0; i < max_tests; i++) begin
-            #2;
             // Generating random input
             rand_array(test_data_i);
             test_data_o = ascon_perm(round_config_i, test_data_i);
 
-            // Writting input
-            for(word_sel_i = 0; word_sel_i < NUM_WORDS; word_sel_i++) begin
-                #4;
-                data_i = test_data_i[word_sel_i];    // Word to be written
-                write_en_i = 1;                      // Enable write
-                #4;
-                write_en_i = 0;
+            // Writing input (Synchronous 1-cycle write loop)
+            for(int w = 0; w < NUM_WORDS; w++) begin
+                @(negedge clk);
+                word_sel_i = w;
+                data_i = test_data_i[w];
+                write_en_i = 1;
             end
+            @(negedge clk);
+            write_en_i = 0;
 
-            word_sel_i = 0;      // Reset index
-            start_perm_i = 1;    // Starting Permutation
-            #4 start_perm_i = 0;
+            // Synchronous start permutation pulse
+            word_sel_i = 0;
+            start_perm_i = 1;
+            @(negedge clk);
+            start_perm_i = 0;
 
             // Wait for permutations to finish
             wait(ready_o == 1);
 
-            // Reading full state output
-            for(word_sel_i = 0; word_sel_i < NUM_WORDS; word_sel_i++) begin
-                #4 state_data_o[word_sel_i] = data_o;
+            // Reading full state output (Synchronous Read)
+            for(int w = 0; w < NUM_WORDS; w++) begin
+                @(negedge clk);
+                word_sel_i = w;
+                // Wait half a cycle for the combinational read data to settle
+                @(posedge clk);
+                state_data_o[w] = data_o;
             end
 
-            // Wait for output to be stable, and check
-            #2;
             check_core_output(test_data_o, state_data_o);
         end
 
@@ -201,26 +210,31 @@ module ascon_core_tb;
                 expected_state_file[i] = temp_word;
             end
 
-            // Write to DUT
-            for(word_sel_i=0; word_sel_i<NUM_WORDS; word_sel_i++) begin
-                #4;
-                data_i = input_state_file[word_sel_i];
+            // Write to DUT (Synchronous 1-cycle write loop)
+            for(int w = 0; w < NUM_WORDS; w++) begin
+                @(negedge clk);
+                word_sel_i = w;
+                data_i = input_state_file[w];
                 write_en_i = 1;
-                #4;
-                write_en_i = 0;
             end
+            @(negedge clk);
+            write_en_i = 0;
 
-            word_sel_i = 0;      // Reset index
-            start_perm_i = 1;    // Starting Permutation
-            #4 start_perm_i = 0;
+            // Synchronous start permutation pulse
+            word_sel_i = 0;
+            start_perm_i = 1;
+            @(negedge clk);
+            start_perm_i = 0;
 
             // Wait for permutations to finish
             wait(ready_o == 1);
 
-            // Read back
-            for(word_sel_i=0; word_sel_i<NUM_WORDS; word_sel_i++) begin
-                #4
-                state_data_o[word_sel_i] = data_o;
+            // Read back (Synchronous Read)
+            for(int w = 0; w < NUM_WORDS; w++) begin
+                @(negedge clk);
+                word_sel_i = w;
+                @(posedge clk);
+                state_data_o[w] = data_o;
             end
 
             check_core_output(expected_state_file, state_data_o);
