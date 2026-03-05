@@ -27,7 +27,6 @@ module ascon_core_tb;
     // Data I/O Control
     ascon_word_t    data_i;
     logic           write_en_i;
-    logic           xor_en_i;
 
     // Data Output (according to word_sel_i)
     ascon_word_t    data_o;
@@ -60,7 +59,6 @@ module ascon_core_tb;
         .word_sel_i(word_sel_i),
         .data_i(data_i),
         .write_en_i(write_en_i),
-        .xor_en_i(xor_en_i),
         .data_o(data_o),
         .ready_o(ready_o)
     );
@@ -88,16 +86,8 @@ module ascon_core_tb;
 
     property write_successful_on_idle;
         @(posedge clk)
-        ((dut.state == 1'b0) & write_en_i & !xor_en_i) |=> (
+        ((dut.state == 1'b0) & write_en_i) |=> (
             dut.state_array[$past(word_sel_i)] == $past(data_i)
-        );
-    endproperty
-
-    property xor_write_sucessful_on_idle;
-        @(posedge clk)
-        ((dut.state == 1'b0) & write_en_i & xor_en_i) |=> (
-                dut.state_array[$past(word_sel_i)] ==
-                ($past(dut.state_array[word_sel_i]) ^ $past(data_i))
         );
     endproperty
 
@@ -108,7 +98,6 @@ module ascon_core_tb;
     assert property (data_stable_when_ready);
     assert property (not_ready_on_start);
     assert property (write_successful_on_idle);
-    assert property (xor_write_sucessful_on_idle);
 
     // ----------------------------
     // Task Definitions
@@ -145,7 +134,6 @@ module ascon_core_tb;
         round_config_i = 0;
         word_sel_i = 3'd0;
         write_en_i = 0;
-        xor_en_i = 0;
         data_i = 320'd0;
         error_count = 0;
 

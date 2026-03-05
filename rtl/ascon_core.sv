@@ -22,7 +22,7 @@
  * synthesis and predictable timing.
  * - Memory Mapping: The 320-bit internal state is addressable as five distinct
  * 64-bit words via `word_sel_i`, allowing external controllers to overwrite
- * or XOR specific lanes (S_0 ... S_4) independently.
+ * specific lanes (S_0 ... S_4) independently.
  * - Round Indexing: Implements a 0-indexed round counter (`rnd_cnt`). For the
  * 8-round permutation (p^8), the required mathematical suffix offset (+4) is
  * delegated to the `constant_addition_layer` module to extract the correct
@@ -47,7 +47,7 @@ module ascon_core (
     // Data I/O Control
     input   ascon_word_t    data_i,
     input   logic           write_en_i,
-    input   logic           xor_en_i,
+
 
     // Data Output (according to word_sel_i)
     output  ascon_word_t    data_o,
@@ -150,11 +150,7 @@ module ascon_core (
             unique case (state)
                 STATE_IDLE: begin
                     if(write_en_i) begin
-                        if(xor_en_i) begin
-                            state_array[word_sel_i] <= data_i ^ state_array[word_sel_i];
-                        end else begin
                             state_array[word_sel_i] <= data_i;
-                        end
                     end
                 end
 
