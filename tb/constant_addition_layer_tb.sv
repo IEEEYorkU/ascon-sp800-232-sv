@@ -26,7 +26,6 @@ module constant_addition_layer_tb;
     int prev_error_count = 0; // Variable to track errors per test
 
     constant_addition_layer dut (
-        .round_config_i(round_config_i),
         .rnd_i(rnd_i),
         .state_array_i(state_array_i),
         .state_array_o(state_array_o)
