@@ -10,7 +10,6 @@
 import ascon_pkg::*;
 
 module constant_addition_layer (
-    input   logic           round_config_i,
     input   rnd_t           rnd_i,
     input   ascon_state_t   state_array_i,
     output  ascon_state_t   state_array_o
@@ -34,9 +33,7 @@ module constant_addition_layer (
 
     always_comb begin
         state_array_o = state_array_i;
-
-        state_array_o[2] = (round_config_i) ? state_array_i[2] ^ AsconRcLut[rnd_i]
-                                            : state_array_i[2] ^ AsconRcLut[rnd_i + 4];
+        state_array_o[2] = state_array_i[2] ^ AsconRcLut[rnd_i];                       
     end
 
 endmodule
