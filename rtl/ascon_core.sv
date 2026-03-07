@@ -71,7 +71,6 @@ module ascon_core (
 
     // Permutation Layers Instances
     constant_addition_layer const_add(
-        .round_config_i(round_config_i),
         .rnd_i(rnd_cnt),
         .state_array_i(state_array),
         .state_array_o(addition_state_array_o)
@@ -88,7 +87,7 @@ module ascon_core (
     // FSM Control Process 1: State Register (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
-        if(rst) begin
+        if (rst) begin
             state <= STATE_IDLE;
         end else begin
             state <= next_state;
@@ -102,7 +101,7 @@ module ascon_core (
 
         case(state)
             STATE_IDLE: begin
-                if(start_perm_i) begin
+                if (start_perm_i) begin
                     next_state = STATE_PERM;
                 end else begin
                     next_state = STATE_IDLE;
@@ -110,7 +109,7 @@ module ascon_core (
             end
 
             STATE_PERM: begin
-                if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
+                if (rnd_cnt < 4'd11) begin
                     next_state = STATE_PERM;
                 end else begin
                     next_state = STATE_IDLE;
@@ -127,47 +126,35 @@ module ascon_core (
     // ----------------------------------------------------------
     always_comb begin
         ready_o = 1'd0;
-        data_o = state_array[word_sel_i];
 
         case(state)
-            STATE_IDLE: begin
-                ready_o = 1'd1;
-            end
-
-            default: begin
-                ready_o = 1'd0;
-            end
+            STATE_IDLE: ready_o = 1'd1;
+            default: ready_o = 1'd0;
         endcase
     end
 
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
-        if(rst) begin
+        if (rst) begin
             rnd_cnt <= 4'd0;
             state_array <= 320'd0;
         end else begin
             unique case (state)
                 STATE_IDLE: begin
-                    if(write_en_i) begin
-                            state_array[word_sel_i] <= data_i;
-                    end
+                    if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
+                    if (write_en_i) state_array[word_sel_i] <= data_i;
                 end
 
                 STATE_PERM: begin
                     state_array <= diffusion_state_array_o;
-
-                    // Prevent counter from going out of bounds for
-                    // constant_addition_layer.AsconRcLut
-                    if(rnd_cnt < (round_config_i ? 4'd11: 4'd7)) begin
-                        rnd_cnt <= rnd_cnt + 4'd1;
-                    end else begin
-                        // Sync counter reset with ready_o signal
-                        rnd_cnt <= 4'd0;
-                    end
+                    if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
                 end
             endcase
         end
     end
+
+    // Combinational Output Data
+    assign data_o = state_array[word_sel_i];
 
 endmodule
