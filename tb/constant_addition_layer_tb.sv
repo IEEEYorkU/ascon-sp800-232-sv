@@ -26,7 +26,6 @@ module constant_addition_layer_tb;
     int prev_error_count = 0; // Variable to track errors per test
 
     constant_addition_layer dut (
-        .round_config_i(round_config_i),
         .rnd_i(rnd_i),
         .state_array_i(state_array_i),
         .state_array_o(state_array_o)
@@ -79,7 +78,7 @@ module constant_addition_layer_tb;
         if (config_i == 1'b1)
             test_rnd = rnd_t'($urandom_range(0, 11)); // Max 12 rounds
         else
-            test_rnd = rnd_t'($urandom_range(0, 7));  // Max 8 rounds
+            test_rnd = rnd_t'($urandom_range(4, 11));  // Max 8 rounds - starting from 4
     endtask
 
     // Generates a random input state array.
@@ -146,14 +145,14 @@ module constant_addition_layer_tb;
         test_array_i = '0;
         state_array_i = test_array_i;
         round_config_i = 1'd0;
-        // Only loop up to 8 rounds (0 through 7) for config 0
-        for (int i = 0; i < 8; i++) begin
+        // Only loop up to 8 rounds (4 through 11) for config 0
+        for (int i = 4; i < 12; i++) begin
             #1;
             test_rnd_i = rnd_t'(i);
             rnd_i = test_rnd_i;
             #1;
-            check_unchanged(test_rnd_i + 4, test_array_i, state_array_o);
-            check_output(test_rnd_i + 4, test_array_i, state_array_o);
+            check_unchanged(test_rnd_i, test_array_i, state_array_o);
+            check_output(test_rnd_i, test_array_i, state_array_o);
         end
         if (error_count == prev_error_count) $display("\nSUCCESS: Test 3 Passed!");
 
@@ -170,8 +169,8 @@ module constant_addition_layer_tb;
             state_array_i = test_array_i;
             rnd_i = test_rnd_i;
             #1;
-            check_unchanged(test_rnd_i + 4, test_array_i, state_array_o);
-            check_output(test_rnd_i + 4, test_array_i, state_array_o);
+            check_unchanged(test_rnd_i, test_array_i, state_array_o);
+            check_output(test_rnd_i, test_array_i, state_array_o);
         end
         if (error_count == prev_error_count) $display("\nSUCCESS: Test 4 Passed!");
 
