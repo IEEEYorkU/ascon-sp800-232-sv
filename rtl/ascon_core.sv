@@ -61,10 +61,6 @@ module ascon_core (
         STATE_IDLE,
         STATE_PERM
     } state_t;
-    state_t state = STATE_IDLE, next_state;
-
-    rnd_t rnd_cnt = 0;
-    ascon_state_t state_array = 320'd0;
 
     // Permutation Layers Output
     ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
@@ -136,22 +132,17 @@ module ascon_core (
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            rnd_cnt <= 4'd0;
-            state_array <= 320'd0;
-        end else begin
-            unique case (state)
-                STATE_IDLE: begin
-                    if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
-                    if (write_en_i) state_array[word_sel_i] <= data_i;
-                end
+        unique case (state)
+            STATE_IDLE: begin
+                if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
+                if (write_en_i) state_array[word_sel_i] <= data_i;
+            end
 
-                STATE_PERM: begin
-                    state_array <= diffusion_state_array_o;
-                    if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
-                end
-            endcase
-        end
+            STATE_PERM: begin
+                state_array <= diffusion_state_array_o;
+                if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
+            end
+        endcase
     end
 
     // Combinational Output Data
