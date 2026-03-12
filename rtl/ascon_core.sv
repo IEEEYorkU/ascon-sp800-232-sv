@@ -136,7 +136,6 @@ module ascon_core (
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------
     always_ff @(posedge clk) begin
-
         unique case (state)
             STATE_IDLE: begin
                 if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
