@@ -135,7 +135,7 @@ module ascon_core (
 
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------
-    always_ff @(posedge clk ) begin
+    always_ff @(posedge clk) begin
 
         unique case (state)
             STATE_IDLE: begin
