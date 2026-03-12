@@ -63,8 +63,8 @@ module ascon_core (
     } state_t;
     state_t state, next_state;;
 
-    rnd_t rnd_cnt = 0;
-    ascon_state_t state_array = 320'd0;
+    rnd_t rnd_cnt;
+    ascon_state_t state_array;
 
     // Permutation Layers Output
     ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
