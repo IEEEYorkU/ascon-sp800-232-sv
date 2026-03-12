@@ -9,11 +9,11 @@
 import ascon_pkg::*;
 
 module linear_diffusion_layer(
-    input ascon_state_t state_array_i,
+    input  ascon_state_t state_array_i,
     output ascon_state_t state_array_o
 );
 
-    logic [63:0] s0, s1, s2, s3, s4;
+    ascon_word_t s0, s1, s2, s3, s4;
 
     assign s0 = state_array_i[0];
     assign s1 = state_array_i[1];
@@ -21,7 +21,7 @@ module linear_diffusion_layer(
     assign s3 = state_array_i[3];
     assign s4 = state_array_i[4];
 
-    logic [63:0] s0_d, s1_d, s2_d, s3_d, s4_d;
+    ascon_word_t s0_d, s1_d, s2_d, s3_d, s4_d;
 
     always_comb begin
         // Rotate-right implemented via logical shifts
