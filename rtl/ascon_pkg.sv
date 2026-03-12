@@ -27,4 +27,51 @@ package ascon_pkg;
     // Round constant type
     typedef logic [3:0] rnd_t;
 
+    // 4-bit TUSER encoding for AXI4-Stream
+    typedef enum logic [3:0] {
+        TUSER_RESERVED = 4'b0000,
+
+        // AEAD Inputs
+        TUSER_KEY      = 4'b0001, // Incoming data is Key (K)
+        TUSER_NONCE    = 4'b0010, // Incoming data is Nonce (N)
+        TUSER_AD       = 4'b0011, // Incoming data is Associated Data (A)
+        TUSER_PT       = 4'b0100, // Incoming data is Plaintext (P)
+        TUSER_CT       = 4'b0101, // Incoming data is Ciphertext (C)
+        TUSER_TAG      = 4'b0110, // Incoming data is Tag (T) - Decryption Verify
+
+        // Hash / XOF Inputs
+        TUSER_MSG      = 4'b0111, // Incoming data is Hash/XOF Message (M)
+        TUSER_Z        = 4'b1000, // Incoming data is CXOF Customization String (Z)
+
+        // Outputs (Used on m_axis_tuser)
+        TUSER_DIGEST   = 4'b1001  // Outgoing data is Hash/XOF Digest
+    } axi_tuser_t;
+
+    // --- Core Data In Select Enum ---
+    // Selects what data is being fed into the ascon core
+    typedef enum logic [2:0] {
+        MODE_AEAD_ENC   = 3'b000,
+        MODE_AEAD_DEC   = 3'b001,
+        MODE_HASH256    = 3'b010,
+        MODE_XOF        = 3'b011,
+        MODE_CXOF       = 3'b100
+    } ascon_mode_t;
+
+    // --- Ascon Core Data-In Select Enum ---
+    // Selects what data is being fed into the ascon core
+    typedef enum logic [1:0] {
+        DATA_IN_AXI_SEL    = 2'b00,
+        DATA_IN_AEAD_SEL   = 2'b01,
+        DATA_IN_HASH_SEL   = 2'b10,
+        DATA_IN_XOR_SEL    = 2'b11
+    } data_sel_t;
+
+    // --- XOR OP2 Select Enum ---
+    // Selects what data is being fed into the xor unit
+    typedef enum logic [1:0] {
+        XOR_IN_AEAD_SEL = 2'b00,
+        XOR_IN_HASH_SEL = 2'b01,
+        XOR_IN_AXI_SEL  = 2'b10
+    } xor_sel_t;
+
 endpackage : ascon_pkg
