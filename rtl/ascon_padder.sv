@@ -84,9 +84,9 @@ module ascon_padder (
     // INTERNAL LOGIC DECLARATIONS
     // =======================================================================
     typedef enum logic [1:0] {
-        STATE_IDLE_PASS = 2'b00, 
-        STATE_PAD_WORD2 = 2'b10,
-        STATE_PAD_WORD1 = 2'b01  
+        STATE_IDLE_PASS = 2'b00,
+        STATE_PAD_WORD1 = 2'b01,
+        STATE_PAD_WORD2 = 2'b10
     } padder_state_t;
 
     padder_state_t state, next_state;
@@ -121,9 +121,9 @@ module ascon_padder (
 
         for(int i = 0; i < 8; i++) begin
             if (s_axis_tkeep_i[i] == 1'b0) begin
-                masked_data[i*8 +: 8] = 8'h80; //place the 0x80 padding byte at the correct position in the data word
+                masked_data[i*8 +: 8] = 8'h80; //place 0x80 padding byte at correct position in data word
                 for(int j = i+1; j < 8; j++) begin
-                    masked_data[j*8 +: 8] = 8'h00; //zero out the remaining bytes after the padding byte
+                    masked_data[j*8 +: 8] = 8'h00; //zero out the remaining bytes after padding byte
                 end
                 break;
             end
@@ -206,7 +206,7 @@ module ascon_padder (
                                     padded_tlast_o      = 1'b0;
                                     pad_word2_data_next = 64'h0000_0000_0000_0000;
                                     next_state          = STATE_PAD_WORD2;
-                                end else begin 
+                                end else begin
                                     // HASH/XOF/CXOF always ends here; AEAD word1 also ends here.
                                     padded_tlast_o = 1'b1;
                                 end
