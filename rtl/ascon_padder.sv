@@ -62,22 +62,22 @@ module ascon_padder (
     // -----------------------------------------------------------------------
     // Raw AXI4-Stream Slave (Data FROM Outside World)
     // -----------------------------------------------------------------------
-    input  ascon_word_t   s_axis_tdata_i,
-    input  logic [7:0]    s_axis_tkeep_i,
-    input  axi_tuser_t    s_axis_tuser_i,
-    input  logic          s_axis_tlast_i,
-    input  logic          s_axis_tvalid_i,
-    output logic          s_axis_tready_o,
+    input  ascon_word_t   s_axis_tdata_i,  // Raw data input
+    input  logic [7:0]    s_axis_tkeep_i,  // Byte enable mask, indicates valid bytes in the last word
+    input  axi_tuser_t    s_axis_tuser_i,  // Identifies the type of data (AD, PT, MSG, KEY, NONCE, TAG, CT, Z)
+    input  logic          s_axis_tlast_i,  // High on the final word of the packet
+    input  logic          s_axis_tvalid_i, // Indicates that the input data is valid
+    output logic          s_axis_tready_o, // Tells the source to stop if the padder is not ready to accept data
 
     // -----------------------------------------------------------------------
     // Padded AXI4-Stream Master (Data TO Top-Level Mux -> FSMs/Core)
     // -----------------------------------------------------------------------
-    output ascon_word_t   padded_tdata_o,
+    output ascon_word_t   padded_tdata_o,  // Post processes 64 bit word with Acson padding rules applied
     output logic [7:0]    padded_tkeep_o,  // Forced to 8'hFF, EXCEPT for TUSER_CT
-    output axi_tuser_t    padded_tuser_o,
+    output axi_tuser_t    padded_tuser_o,  // Forwared or held metadata tag to maintain packet context
     output logic          padded_tlast_o,  // High only when the block is fully rate-aligned
-    output logic          padded_tvalid_o,
-    input  logic          padded_tready_i
+    output logic          padded_tvalid_o, // Indicates packet is ready for the next stage (FSMs/Core)
+    input  logic          padded_tready_i  // Allows the core to stall the padder if it is not ready to accept data
 );
 
     // =======================================================================
