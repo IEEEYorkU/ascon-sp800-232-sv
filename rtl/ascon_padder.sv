@@ -1,6 +1,6 @@
 /* =============================================================================
  * Module Name: ascon_padder
- * Author(s):   Kiet Le
+ * Author(s):   Kiet Le, Tirth Patel, Kevin Duong
  * Description:
  * AXI4-Stream pre-processor (Data Formatter/Framer) for the Ascon Hardware
  * Accelerator. This module acts as a pipeline stage between the raw external
