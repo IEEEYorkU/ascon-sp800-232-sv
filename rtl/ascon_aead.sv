@@ -1,157 +1,51 @@
 import ascon_pkg::*;
 
-/*
-I finished Initialization, Associated data, plaintext
-there are still Finalization and tag generation, signal completion or authentication failure
-and combinational section for translates state into output signal
-(when fsm moves to new states, these signals update instantly in the same cycles)
-*/
-/* 
-Need to add aead_state_t in pkg, 
-Need this or we can put these def in ascon_ctrl and ascon_datapath 
-This aead_state help to carry step from ctrl to datapath 
 
-*/
-/*  
-State encode
-
-init: 9 state 
-idle -> init_s0-> init_s1, init_s2, init_s3, init_s4 -> init_perm
-init_kx3-> init_kx4
-
-
-ad: 5 state 
-Check -> xor0 -> xor 1 -> perm -> dom 
-
-data: 10 state 
-read_s0 -> read_s1-> xor0 -> xor1 -> out0-> out1 -> wr1-> perm-> check 
-
-fin: 5 state 
-kx2 -> kx3 -> perm -> read_3-> read_4 
-
-end: 2 state 
-done, error 
-
-total: 31 state 
-*/
-
-
-// fsm state type
-// aead_state_t is not in ascon_pkg.sv so i defined locally here.
-// we need to copy this typedef into ascon_datapath.sv (state_i input).
-/*
-typedef enum logic [4:0] {
-
-    ST_IDLE,
-
-    // ── Init ──────────────────────────────────────────────────────────────
-
-    ST_INIT_S0,     // write IV        → S0
-
-    ST_INIT_S1,     // write K[127:64] → S1
-
-    ST_INIT_S2,     // write K[63:0]   → S2
-
-    ST_INIT_S3,     // write N[127:64] → S3
-
-    ST_INIT_S4,     // write N[63:0]   → S4
-
-    ST_INIT_PERM,   // wait p[12] · 12 cycles
-
-    ST_INIT_KX3,    // S3 ^= K[127:64]
-
-    ST_INIT_KX4,    // S4 ^= K[63:0]
-
-    // ── Associated Data ───────────────────────────────────────────────────
-
-    ST_AD_CHECK,    // has_adata_i ?
-
-    ST_AD_XOR0,     // S0 ^= Ai[127:64]
-
-    ST_AD_XOR1,     // S1 ^= Ai[63:0]
-
-    ST_AD_PERM,     // wait p[8] · 8 cycles
-
-    ST_AD_DOM,      // S4 ^= DOMAIN_SEP
-
-    // ── Data ──────────────────────────────────────────────────────────────
-
-    ST_DAT_RD0,     // dec: read S0 → sread_r[0]
-
-    ST_DAT_RD1,     // dec: read S1 → sread_r[1]
-
-    ST_DAT_XOR0,    // enc: S0 ^= Pi[127:64]
-
-    ST_DAT_XOR1,    // enc: S1 ^= Pi[63:0]  · latch is_last_r
-
-    ST_DAT_OUT0,    // enc: read S0 → Ci[127:64]
-
-    ST_DAT_OUT1,    // enc: read S1 → Ci[63:0]  · data_valid_o
-
-    ST_DAT_WR0,     // dec: S0 = Ci[127:64]
-
-    ST_DAT_WR1,     // dec: S1 = Ci[63:0]        · data_valid_o
-
-    ST_DAT_PERM,    // wait p[8] · 8 cycles (shared ENC+DEC)
-
-    ST_DAT_CHECK,   // is_last_r → FIN / else loop
-
-    // ── Finalization ──────────────────────────────────────────────────────
-
-    ST_FIN_KX2,     // S2 ^= K[127:64]
-
-    ST_FIN_KX3,     // S3 ^= K[63:0]
-
-    ST_FIN_PERM,    // wait p[12] · 12 cycles
-
-    ST_FIN_RD3,     // read S3 → tag_r[0] = S3 ^ K[127:64]
-
-    ST_FIN_RD4,     // read S4 → tag_r[1] = S4 ^ K[63:0]
-
-    // ── End ───────────────────────────────────────────────────────────────
-
-    ST_DONE,        // done_o = 1
-
-    ST_ERROR        // auth_fail_o = 1 (DEC tag mismatch)
-
-} aead_state_t;
-
-/*
-P: Plaintext 
-i: block index
-Pi: i-th plaintext block 
-Ci: i_th ciphertext block 
-*/
-
-module ascon_ctrl(
+module ascon_aead(
     //Clock, reset 
     input logic clk,
     input logic rst, 
 
     //Mode,Control
-    input logic start_i,  // begin operation 
-    input logic enc_dec_i, // enc=0, 1= dec 
+    input ascon_mode_t mode_i,  //Mode: ENC or DEC 
+    input logic        start_i,        
+    output logic       busy_o,     
+    output logic       done_o, 
+    output logic       tag_fail_o, //Decryption tag check fails 
 
-    //Key,Nonce
-    input ascon_word_t key_i [0:1],
-    input ascon_word_t nonce_i [0:1],
+    //Interface 
+    input  logic                ascon_ready_i, 
+    output logic                start_perm_o, 
+    output logic                round_config_o,
+    output logic     [2:0]      word_sel_o,  // target state word address S0,S1,.., S4
+    output ascon_word_t         data_o,
+    output logic                write_en_o, 
+    output logic                xor_en_o,
+    output data_sel_t           in_data_sel_o,  //Mux select for core data_i source 
+    input  ascon_word_t         core_data_i,
+    
 
     // AD- AXI STREAM from padder unit 
-    input ascon_word_t adata_i [0:1], // padded ad block
-    input logic adata_valid_i, // ad word ready 
-    input logic adata_last_i, // last ad blcok 
-    input logic has_adata_i,  // any ad exists 
-    input axi_tuser_t adata_tuser_i, // be tuser ad 
+
+    input ascon_word_t     padded_tdata_i, //Pre-processed 
+    input logic [7:0]      padded_tkeep_i, //Pass - through for CT 
+    input axit_tiser_t     padded_tuser_i, //Packet type
+    input logic            padded_tlast_i, //last word in the message 
+    input logic            padded_tvalid_i
+    output logic            padded_tready_o, 
+    
 
     // Plaintext / Ciphertext - AX4 stream from padder unit 
-    input ascon_word_t ptext_i [0:1], // enc: plaintext padded, dec: ciphertext 
-    input logic ptext_valid_i, // block is ready 
-    input logic ptext_last_i, // last block 
-    input logic ptext_tkeep_i,
-    /*byte enable 
-      8hFF for tuser_pt
-      raw tkeep or tuser_ct                
-    */
+    output ascon_word_t     m_axis_tdata_o, 
+    output logic [7:0]      m_axis_tkeep_o,
+    output logic [2:0]      m_axis_tuser_o, 
+    output logic            m_axis_tlast_o, 
+    output logic            m_axis_tvalid_o, 
+    input logic             m_ais_tready_i, 
+
+
+
+    ===================================================================================
     input axi_tuser_t ptext_tuser_i,
 
     //tag only for dec 
