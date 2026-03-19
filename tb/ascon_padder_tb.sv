@@ -69,14 +69,14 @@ module ascon_padder_tb;
     endfunction
 
     // AXI-S helpers
-    task apply_reset();
+    task automatic apply_reset();
         rst = 1; s_axis_tvalid_i = 0; s_axis_tlast_i = 0;
         s_axis_tkeep_i = 8'hFF; s_axis_tdata_i = '0;
         s_axis_tuser_i = TUSER_RESERVED; padded_tready_i = 1;
         @(posedge clk); #1; rst = 0; @(posedge clk); #1;
     endtask
 
-    task send_beat(input ascon_word_t data, input logic [7:0] keep,
+    task automatic send_beat(input ascon_word_t data, input logic [7:0] keep,
                    input axi_tuser_t tuser, input logic tlast);
         s_axis_tdata_i = data; s_axis_tkeep_i = keep;
         s_axis_tuser_i = tuser; s_axis_tlast_i = tlast; s_axis_tvalid_i = 1;
@@ -84,7 +84,7 @@ module ascon_padder_tb;
         s_axis_tvalid_i = 0; s_axis_tlast_i = 0;
     endtask
 
-    task collect_beat(output ascon_word_t data, output logic [7:0] keep, output logic tlast);
+    task automatic collect_beat(output ascon_word_t data, output logic [7:0] keep, output logic tlast);
         do @(posedge clk); while (!(padded_tvalid_o && padded_tready_i));
         data = padded_tdata_o; keep = padded_tkeep_o; tlast = padded_tlast_o; #1;
     endtask
