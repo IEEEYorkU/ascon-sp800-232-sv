@@ -57,72 +57,123 @@ module hash_fsm (
     // =======================================================================
     // FSM State Declarations & Logic
     // =======================================================================
-    typedef enum logic [6:0] {
-        IDLE    = 7'b0000001,
-        INIT    = 7'b0000010,
-        ABSORB  = 7'b0000100,
-        SQUEEZE = 7'b0001000
-    } hash_state_e;
-
-    hash_state_e State, NextState;
+    typedef enum {
+        STATE_IDLE,
+        STATE_INIT,
+        STATE_PERM,
+        STATE_ABSORB,
+        STATE_SQUEEZE
+    } state_t;
+    state_t state, next_state;
 
     // (State machine logic goes here)
 
     // =======================================================================
-    // State register
+    // CONTROL FSM
     // =======================================================================
-    always_ff @(posedge clk) begin
-        if (rst)
-            State <= IDLE;
-        else
-            State <= NextState;
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state <= STATE_IDLE;
+        end else begin
+            state <= next_state;
+        end
     end
 
     // =======================================================================
-    // Next state + outputs logic
+    // NEXT STATE DECODER
     // =======================================================================
     always_comb begin
-        // Defaults
-        NextState = State;
+        next_state = state;
 
-        // =================================
-        // State actions / transitions
-        // =================================
-        unique case (State)
+        unique case (state)
+            STATE_IDLE: begin
+                if (start_i) next_state = STATE_INIT;
+            end
 
-            IDLE: begin
-                busy_o = 1'b0;
-                done_o = 1'b0;
+            STATE_INIT: begin
+                // Wait until all 5 IV words are loaded
+                if (word_cnt == 3'd4) next_state = STATE_PERM;
+            end
 
-                // wait for start
-                if (start_i) begin
-                    NextState = INIT;
+            STATE_PERM: begin
+                // Wait for the Core to finish the permutation cycles
+                if (ascon_ready_i) begin
+                    // If we just finished INIT or intermediate ABSORB
+                    if (!padded_tlast_i)
+                        next_state = STATE_ABSORB;
+                    else
+                        next_state = STATE_SQUEEZE;
                 end
             end
 
-            INIT: begin
-                busy_o = 1'b1;
-
-                // TODO:
-                // NextState = ABSORB;
+            STATE_ABSORB: begin
+                // Handshake with Padder; if data is consumed, permute it
+                if (padded_tvalid_i && ascon_ready_i) begin
+                    next_state = STATE_PERM;
+                end
             end
 
-            ABSORB: begin
-                busy_o = 1'b1;
-
-                // TODO:
-                // NextState = SQUEEZE;
+            STATE_SQUEEZE: begin
+                // Handshake with Master; if data is sent, check if done
+                if (m_axis_tready_i) begin
+                    if (squeeze_cnt == 3'd3 || abort_i)
+                        next_state = STATE_IDLE;
+                    else
+                        next_state = STATE_PERM;
+                end
             end
 
-            SQUEEZE: begin
-                busy_o = 1'b1;
+            default: next_state = STATE_IDLE;
+        endcase
+    end
 
-                // TODO:
-                // NextState = IDLE;
+    // =======================================================================
+    // OUTPUT DECODER
+    // =======================================================================
+    always_comb begin
+        // Default values
+        busy_o             = 1'b1;
+        done_o             = 1'b0;
+        start_perm_o       = 1'b0;
+        round_config_o     = 1'b0;
+        write_en_o         = 1'b0;
+        word_sel_o         = word_cnt;
+        core_in_data_sel_o = 2'b00;
+        xor_sel_o          = 2'b00;
+        padded_tready_o    = 1'b0;
+        m_axis_tvalid_o    = 1'b0;
+        m_axis_tlast_o     = 1'b0;
+        m_axis_tkeep_o     = 8'hFF;
+        data_o             = 64'b0;
+
+        unique case (state)
+            STATE_IDLE: begin
+                busy_o = 1'b0;
             end
 
-            default: begin
-                NextState = IDLE;
+            STATE_INIT: begin
+                write_en_o = 1'b1;
+                // data_o logic should be assigned here based on word_cnt
+                // e.g., data_o = ASCON_HASH_IV[word_cnt];
+            end
+
+            STATE_PERM: begin
+                // Signal the core to start the p12/p8 permutation
+                if (ascon_ready_i) start_perm_o = 1'b1;
+            end
+
+            STATE_ABSORB: begin
+                padded_tready_o = ascon_ready_i;
+                xor_sel_o       = 2'b01; // Tells core to XOR padded_tdata into state
+            end
+
+            STATE_SQUEEZE: begin
+                m_axis_tvalid_o = 1'b1;
+                // Last block signal for AXI-Stream
+                if (squeeze_cnt == 3'd3 || abort_i) begin
+                    m_axis_tlast_o = 1'b1;
+                    done_o = 1'b1;
+                end
             end
         endcase
     end
