@@ -1,3 +1,53 @@
+/* Module Name: ascon_aead
+ * Author(s):  
+ * Description:
+ * The protocol orchestrator ("The Brain") for the Ascon-AEAD128 Authenticated
+ * Encryption and Decryption Accelerator. This module implements Algorithm 3
+ * (Authenticated Encryption) and Algorithm 4 (Authenticated Decryption) as
+ * defined in NIST SP 800-232, coordinating all cryptographic phases from
+ * initialization through tag generation and verification.
+ *
+ * Design Philosophy (Pure Protocol Sequencer):
+ * This FSM is designed as a stateless control-path orchestrator. It possesses
+ * zero knowledge of the mathematical internals of the Ascon permutation. It
+ * relies entirely on the ascon_core module to execute the permutation rounds,
+ * and communicates with the outside world exclusively through the AXI4-Stream
+ * protocol via the ascon_padder. All byte-level padding and rate-alignment
+ * concerns are fully delegated to the ascon_padder, allowing this FSM to
+ * operate purely at the block level.
+ *
+ * Implementation Details:
+ * - State Machine: Implements 11 architectural states (ST_IDLE, ST_INIT,
+ *   ST_PERM, ST_AD, ST_PT_IN, ST_CT_IN, ST_TAG_INIT, ST_ENC_TAG, ST_DEC_TAG,
+ *   ST_VERIFY, ST_DONE) plus one defensive ST_ERROR state, built using the
+ *   robust 4-process (State Register, Next-State Logic, Output
+ *   Decoder, Action Logic) consistent with ascon_core.sv.
+ * - Shared Permutation State: ST_PERM is reused across all four permutation
+ *   phases (initialization, associated data, processing ciphertext/plaintext, finalization). A
+ *   perm_ctx_r register records which phase triggered the permutation and
+ *   where to return upon completion.
+ * - Post-Permutation Operations: Key XOR into S3/S4 (after CTX_INIT and
+ *   CTX_FINAL) and domain separation into S4 (after CTX_AD last block) are
+ *   performed within ST_PERM itself using a post_perm_cnt_r counter, avoiding
+ *   the need for additional states and reducing overall FSM complexity.
+ * - Critical Spec Compliance: The final plaintext or ciphertext block does NOT
+ *   trigger a permutation, per NIST SP 800-232 Algorithms 3 and 4. ST_PT_IN
+ *   and ST_CT_IN transition directly to ST_TAG_INIT on padded_tlast, bypassing
+ *   ST_PERM entirely for the last block.
+ * - Simultaneous Data Transform and Output: During ST_PT_IN and ST_CT_IN, the
+ *   FSM simultaneously reads the current state word from ascon_core (via
+ *   core_data_i), computes the transformed output (CT or PT), writes the
+ *   updated state back to the core, and drives the AXI master interface — all
+ *   within a single clock cycle.
+ * - Tag Verification: During decryption, the received tag words are latched in
+ *   ST_DEC_TAG and compared against the computed tag words (S3, S4) in
+ *   ST_VERIFY over two consecutive cycles using the combinational read port
+ *   of ascon_core.
+ *
+ * Ref: NIST SP 800-232, Section 4
+ */
+
+
 import ascon_pkg::*;
 
 
