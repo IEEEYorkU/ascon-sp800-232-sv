@@ -112,23 +112,30 @@ module ascon_padder (
     logic is_aead_mode; //AEAD mode helper
     assign is_aead_mode = ((mode_i == MODE_AEAD_ENC) || (mode_i == MODE_AEAD_DEC));
 
+    // Icarus does not support variable part-selects ([i*8 +: 8]) or break
+    // inside always_comb. The padding logic is therefore implemented as a
+    // function and wired via assign, which Icarus handles without restriction.
+    // The case enumerates every contiguous tkeep pattern Ascon can produce:
+    //   tkeep = 8'h00..8'h7F → inject 0x80 at the first invalid byte position
+    //   tkeep = 8'hFF        → full word, no padding here (carry word handles it)
+    function automatic ascon_word_t apply_padding(
+        input ascon_word_t data,
+        input logic [7:0]  keep
+    );
+        case (keep)
+            8'h00:   apply_padding = {56'h00_00_00_00_00_00_00, 8'h80};                   // 0 valid bytes
+            8'h01:   apply_padding = {48'h00_00_00_00_00_00,    8'h80, data[7:0]};        // 1 valid byte
+            8'h03:   apply_padding = {40'h00_00_00_00_00,       8'h80, data[15:0]};       // 2 valid bytes
+            8'h07:   apply_padding = {32'h00_00_00_00,          8'h80, data[23:0]};       // 3 valid bytes
+            8'h0F:   apply_padding = {24'h00_00_00,             8'h80, data[31:0]};       // 4 valid bytes
+            8'h1F:   apply_padding = {16'h00_00,                8'h80, data[39:0]};       // 5 valid bytes
+            8'h3F:   apply_padding = { 8'h00,                   8'h80, data[47:0]};       // 6 valid bytes
+            8'h7F:   apply_padding = {                          8'h80, data[55:0]};       // 7 valid bytes
+            default: apply_padding = data; //8'hFF full word, no padding here (carry word handles it)
+        endcase
+    endfunction
 
-    always_comb begin
-        masked_data = s_axis_tdata_i; // default, pass through data unmodified
-
-        //search for the first 0 bit in the TKEEP to place the 0x80(1000 0000) padding byte
-        //if TKEEP 8'hFF, the 0x80 is NOT placed (it goes in the next word)
-
-        for(int i = 0; i < 8; i++) begin
-            if (s_axis_tkeep_i[i] == 1'b0) begin
-                masked_data[i*8 +: 8] = 8'h80; //place 0x80 padding byte at correct position in data word
-                for(int j = i+1; j < 8; j++) begin
-                    masked_data[j*8 +: 8] = 8'h00; //zero out the remaining bytes after padding byte
-                end
-                break;
-            end
-        end
-    end
+    assign masked_data = apply_padding(s_axis_tdata_i, s_axis_tkeep_i);
 
     // -----------------------------------------------------------------------
     // 2. State Machine Logic
