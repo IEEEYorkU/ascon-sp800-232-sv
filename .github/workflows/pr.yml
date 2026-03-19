@@ -94,7 +94,7 @@ jobs:
         run: |
           yosys -m slang -p "read_slang -f rtl.f; synth"
 
-# --- 3. Linter ---
+  # --- 3. Linter ---
   lint:
     runs-on: ubuntu-latest
     permissions:
