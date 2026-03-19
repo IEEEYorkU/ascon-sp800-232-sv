@@ -67,8 +67,7 @@ module ascon_core (
     ascon_state_t state_array;
 
     // Permutation Layers Output
-    ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;                                                // test 140
-                                                                                                                                      //hi
+    ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
 
     // Permutation Layers Instances
     constant_addition_layer const_add(
