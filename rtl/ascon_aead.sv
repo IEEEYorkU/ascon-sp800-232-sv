@@ -104,7 +104,8 @@ module ascon_aead(
     output logic [2:0]      m_axis_tuser_o,
     output logic            m_axis_tlast_o,
     output logic            m_axis_tvalid_o,
-    input logic             m_axis_tready_i
+    input  logic            m_axis_tready_i
+
 );
 
     localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
@@ -718,7 +719,7 @@ module ascon_aead(
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = 1'b1;
                     m_axis_tkeep_o  = padded_tkeep_i;
-                    m_axis_tuser_o  = 3'(TUSER_CT);
+                    m_axis_tuser_o  = 4'(TUSER_CT);
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
@@ -735,7 +736,7 @@ module ascon_aead(
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = 1'b1;
                     m_axis_tkeep_o  = padded_tkeep_i;
-                    m_axis_tuser_o  = 3'(TUSER_PT);
+                    m_axis_tuser_o  = 4'(TUSER_PT);
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
@@ -757,7 +758,7 @@ module ascon_aead(
             ST_ENC_TAG: begin
                 m_axis_tvalid_o = 1'b1;
                 m_axis_tkeep_o  = 8'hFF;
-                m_axis_tuser_o  = 3'(TUSER_TAG);
+                m_axis_tuser_o  = 4'(TUSER_TAG);
                 m_axis_tlast_o  = (tag_cnt_r == 1'b1);
                 word_sel_o      = (tag_cnt_r == 1'b0) ? 3'd3 : 3'd4;
                 m_axis_tdata_o  = core_data_i;
