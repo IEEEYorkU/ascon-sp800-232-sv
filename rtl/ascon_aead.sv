@@ -68,7 +68,7 @@ module ascon_aead(
     //Interface
     input  logic                ascon_ready_i,
     output logic                start_perm_o,
-    output logic                start_perm_o, 
+    output logic                start_perm_o,    output logic                start_perm_o,
     output logic                round_config_o,
     output logic     [2:0]      word_sel_o,  // target state word address S0,S1,.., S4
     output ascon_word_t         data_o,
