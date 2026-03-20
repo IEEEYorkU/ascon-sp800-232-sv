@@ -53,9 +53,10 @@ import ascon_pkg::*;
 
 
 module ascon_aead(
-    //Clock, reset    //Clock, reset
-    input logic rst,
-    input logic rst,    input logic rst,
+    //Clock, reset  
+    input logic clk,
+    input logic rst, 
+    
 //==========================================================================
     //Mode,Control
 //==========================================================================
@@ -68,40 +69,35 @@ module ascon_aead(
     //Interface
     input  logic                ascon_ready_i,
     output logic                start_perm_o,
-    output logic                start_perm_o,    output logic                start_perm_o,
     output logic                round_config_o,
     output logic     [2:0]      word_sel_o,  // target state word address S0,S1,.., S4
     output ascon_word_t         data_o,
-    output logic                write_en_o,    output logic                write_en_o,
+    input ascon_word_t          core_data_i,
+    output logic                write_en_o,    
+    output logic                xỏ_en_o,
     output data_sel_t           in_data_sel_o,  //Mux select for core data_i source
 
     // AD- AXI STREAM from padder unit
+    input  logic           padded_tvalid_i,
     input ascon_word_t     padded_tdata_i, //Pre-processed
     input logic [7:0]      padded_tkeep_i, //Pass - through for CT
+    input  axi_tuser_t     padded_tuser_i,
     input logic            padded_tlast_i, //last word in the message
-    output logic            padded_tready_o,
-
-    // Plaintext / Ciphertext - AX4 stream from padder unit
-    output ascon_word_t     m_axis_tdata_o,
-    output logic [2:0]      m_axis_tuser_o,
-    output logic            m_axis_tlast_o,
-    output logic            m_axis_tvalid_o,
-
+    output logic           padded_tready_o,
 
     // Plaintext / Ciphertext - AX4 stream from padder unit
     output ascon_word_t     m_axis_tdata_o,
     output logic [7:0]      m_axis_tkeep_o,
-    output logic [2:0]      m_axis_tuser_o,
+    output logic [3:0]      m_axis_tuser_o,
     output logic            m_axis_tlast_o,
     output logic            m_axis_tvalid_o,
-    input logic             m_axis_tready_i
+    input  logic            m_axis_tready_i
+
 );
 
-    localparam ascon_word_t     localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
+    localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
     localparam logic ROUND_PA = 1'b1;  //12 round permutaiton
     localparam logic ROUND_PB = 1'b0;  //8 round permuation
-    typedef enum logic [3:0] {
-
 
     typedef enum logic [3:0] {
         ST_IDLE     = 4'd0,
@@ -146,6 +142,7 @@ module ascon_aead(
 
     //PT/CT absorption
     logic    dat_word_r;
+    logic    dat_last_seen_r
 
     //Finalization
     logic [1:0] tag_init_cnt_r; //0=K->S3 XOR, 1=K->S4 XOR, 2=transition to PERM
@@ -174,6 +171,10 @@ module ascon_aead(
     //Permutation complete
     logic perm_done;
     assign perm_done = perm_started_r && ascon_ready_i;
+
+    //Padder handshake pulse 
+    logic phs; 
+    assign phs = padded_tvalid_i && padded_tready_o;
 
     //Max post-per counter value
     logic [1:0] pp_max;
@@ -323,142 +324,6 @@ module ascon_aead(
 
             default: next_state = ST_IDLE;
         endcase
-    end
-
-
-    //==========================================================================
-    // Sequential side registers/control signals
-    //==========================================================================
-
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            init_cnt_r         <= 3'd0;
-            perm_ctx_r         <= CTX_INIT;
-            perm_started_r     <= 1'b0;
-            post_perm_active_r <= 1'b0;
-            post_perm_cnt_r    <= 2'd0;
-            ad_word_r          <= 1'b0;
-            ad_last_seen_r     <= 1'b0;
-            dat_word_r         <= 1'b0;
-            tag_init_cnt_r     <= 2'd0;
-            tag_cnt_r          <= 1'b0;
-            verify_cnt_r       <= 2'd0;
-            tag_ok_r           <= 1'b1;
-            key_r[0]           <= 64'd0;
-            key_r[1]           <= 64'd0;
-            rx_tag_r[0]        <= 64'd0;
-            rx_tag_r[1]        <= 64'd0;
-        end else begin
-            // INIT counter + key capture
-            if (state_r == ST_INIT) begin
-                if (init_cnt_r == 3'd0 && ascon_ready_i) begin
-                    init_cnt_r <= 3'd1;
-                end else if ((init_cnt_r <= 3'd2) && padded_tvalid_i && padded_tuser_i == TUSER_KEY && padded_tready_o) begin
-                    init_cnt_r <= init_cnt_r + 3'd1;
-                    key_r[init_cnt_r-1] <= padded_tdata_i;
-                end else if ((init_cnt_r >= 3'd3 && init_cnt_r <= 3'd4) && padded_tvalid_i && padded_tuser_i == TUSER_NONCE && padded_tready_o) begin
-                    init_cnt_r <= init_cnt_r + 3'd1;
-                end
-            end else if (next_state == ST_INIT) begin
-                init_cnt_r <= 3'd0;
-            end
-
-            // PERM context set on entry
-            if (state_r != ST_PERM && next_state == ST_PERM) begin
-                case (state_r)
-                    ST_INIT:  perm_ctx_r <= CTX_INIT;
-                    ST_AD:    perm_ctx_r <= CTX_AD;
-                    ST_PT_IN: perm_ctx_r <= CTX_DATA;
-                    ST_CT_IN: perm_ctx_r <= CTX_DATA;
-                    ST_TAG_INIT: perm_ctx_r <= CTX_FINAL;
-                    default: perm_ctx_r <= perm_ctx_r;
-                endcase
-                perm_started_r <= 1'b0;
-                post_perm_active_r <= 1'b0;
-                post_perm_cnt_r <= 2'd0;
-            end
-
-            // Permutation sequencing
-            if (state_r == ST_PERM) begin
-                if (!perm_started_r) begin
-                    perm_started_r <= 1'b1;
-                end else if (perm_done && needs_post_perm && !post_perm_active_r) begin
-                    post_perm_active_r <= 1'b1;
-                    post_perm_cnt_r <= 2'd0;
-                end else if (post_perm_active_r) begin
-                    if (post_perm_cnt_r < pp_max) begin
-                        post_perm_cnt_r <= post_perm_cnt_r + 2'd1;
-                    end else begin
-                        post_perm_active_r <= 1'b0;
-                    end
-                end
-            end
-
-            // AD state controls
-            if (state_r == ST_AD && ad_word_valid) begin
-                ad_word_r <= ~ad_word_r;
-                ad_last_seen_r <= padded_tlast_i;
-            end else if (next_state == ST_AD) begin
-                ad_word_r <= 1'b0;
-                ad_last_seen_r <= 1'b0;
-            end
-
-            // PT/CT word pointer
-            if ((state_r == ST_PT_IN && pt_word_valid) || (state_r == ST_CT_IN && ct_word_valid)) begin
-                dat_word_r <= ~dat_word_r;
-            end else if (next_state == ST_PT_IN || next_state == ST_CT_IN) begin
-                dat_word_r <= 1'b0;
-            end
-
-            // TAG init counter
-            if (state_r == ST_TAG_INIT) begin
-                if (tag_init_cnt_r < 2'd2) tag_init_cnt_r <= tag_init_cnt_r + 2'd1;
-            end else if (next_state == ST_TAG_INIT) begin
-                tag_init_cnt_r <= 2'd0;
-            end
-
-            // ENC_TAG counter
-            if (state_r == ST_ENC_TAG && m_axis_tvalid_o && m_axis_tready_i) begin
-                tag_cnt_r <= tag_cnt_r + 1'b1;
-            end else if (next_state == ST_ENC_TAG) begin
-                tag_cnt_r <= 1'b0;
-            end
-
-            // DEC_TAG receive
-            if (state_r == ST_DEC_TAG && padded_tvalid_i && padded_tready_o && padded_tuser_i == TUSER_TAG) begin
-                rx_tag_r[tag_cnt_r] <= padded_tdata_i;
-                tag_cnt_r <= tag_cnt_r + 1'b1;
-            end else if (next_state == ST_DEC_TAG) begin
-                tag_cnt_r <= 1'b0;
-            end
-
-            // VERIFY phase
-            if (state_r == ST_VERIFY) begin
-                if (verify_cnt_r < 2'd2) begin
-                    verify_cnt_r <= verify_cnt_r + 2'd1;
-                end
-                if (verify_cnt_r == 2'd0) begin
-                    tag_ok_r <= (core_data_i == rx_tag_r[0]);
-                end else if (verify_cnt_r == 2'd1) begin
-                    tag_ok_r <= tag_ok_r && (core_data_i == rx_tag_r[1]);
-                end
-            end else if (next_state == ST_VERIFY) begin
-                verify_cnt_r <= 2'd0;
-                tag_ok_r <= 1'b1;
-            end
-
-            // DONE
-            if (state_r == ST_DONE && !start_i) begin
-                // clear non-state sequencers here if needed
-            end
-
-            // Reset perm_started and post_perm if exited PERM
-            if (state_r == ST_PERM && next_state != ST_PERM) begin
-                perm_started_r <= 1'b0;
-                post_perm_active_r <= 1'b0;
-                post_perm_cnt_r <= 2'd0;
-            end
-        end
     end
 
 
@@ -612,7 +477,7 @@ module ascon_aead(
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = 1'b1;
                     m_axis_tkeep_o  = padded_tkeep_i;
-                    m_axis_tuser_o  = 3'(TUSER_CT);
+                    m_axis_tuser_o  = 4'(TUSER_CT);
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
@@ -628,7 +493,7 @@ module ascon_aead(
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = 1'b1;
                     m_axis_tkeep_o  = padded_tkeep_i;
-                    m_axis_tuser_o  = 3'(TUSER_PT);
+                    m_axis_tuser_o  = 4'(TUSER_PT);
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
@@ -650,7 +515,7 @@ module ascon_aead(
             ST_ENC_TAG: begin
                 m_axis_tvalid_o = 1'b1;
                 m_axis_tkeep_o  = 8'hFF;
-                m_axis_tuser_o  = 3'(TUSER_TAG);
+                m_axis_tuser_o  = 4'(TUSER_TAG);
                 m_axis_tlast_o  = (tag_cnt_r == 1'b1);
                 word_sel_o      = (tag_cnt_r == 1'b0) ? 3'd3 : 3'd4;
                 m_axis_tdata_o  = core_data_i;
@@ -679,7 +544,190 @@ module ascon_aead(
         endcase
     end
 
+//============================================================================
+//ACTION LOGIC 
+//============================================================================
 
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            perm_ctx_r         <= CTX_INIT;
+            init_cnt_r         <= 3'd0;
+            perm_started_r     <= 1'b0;
+            post_perm_active_r <= 1'b0;
+            post_perm_cnt_r    <= 2'd0;
+            ad_word_r          <= 1'b0;
+            ad_last_seen_r     <= 1'b0;
+            dat_word_r         <= 1'b0;
+            dat_last_seen_r    <= 1'b0;
+            tag_init_cnt_r     <= 2'd0;
+            tag_cnt_r          <= 1'b0;
+            verify_cnt_r       <= 2'd0;
+            key_r[0]           <= 64'd0;
+            key_r[1]           <= 64'd0;
+            rx_tag_r[0]        <= 64'd0;
+            rx_tag_r[1]        <= 64'd0;
+            tag_ok_r           <= 1'b1;
+        end
+
+
+        else begin 
+            case (state_r) 
+                ST_IDLE: begin
+                    if (start_i) begin
+                        init_cnt_r         <= 3'd0;
+                        perm_ctx_r         <= CTX_INIT;
+                        ad_word_r          <= 1'b0;
+                        ad_last_seen_r     <= 1'b0;
+                        dat_word_r         <= 1'b0;
+                        dat_last_seen_r    <= 1'b0;
+                        tag_init_cnt_r     <= 2'd0;
+                        tag_cnt_r          <= 1'b0;
+                        verify_cnt_r       <= 2'd0;
+                        tag_ok_r           <= 1'b1;
+                        perm_started_r     <= 1'b0;
+                        post_perm_active_r <= 1'b0;
+                        post_perm_cnt_r    <= 2'd0;
+                    end
+                end
+           ST_INIT: begin
+                    case (init_cnt_r)
+                        3'd0: begin
+                            if (ascon_ready_i) init_cnt_r <= 3'd1;
+                        end
+                        3'd1: begin
+                            if (phs && padded_tuser_i == TUSER_KEY) begin
+                                key_r[0]   <= padded_tdata_i; // Capture K
+                                init_cnt_r <= 3'd2;
+                            end
+                        end
+                        3'd2: begin
+                            if (phs && padded_tuser_i == TUSER_KEY) begin
+                                key_r[1]   <= padded_tdata_i; // Capture K
+                                init_cnt_r <= 3'd3;
+                            end
+                        end
+                        3'd3: begin
+                            if (phs && padded_tuser_i == TUSER_NONCE)
+                                init_cnt_r <= 3'd4;
+                        end
+                        3'd4: ; // Hold; next-state transitions on this beat
+                        default: ;
+                    endcase
+                end
+                
+                ST_PERM: begin
+                    if (!perm_started_r)
+                        perm_started_r <= 1'b1;
+
+                    if (perm_done) begin
+                        perm_started_r <= 1'b0;
+                        if (needs_post_perm) begin
+                            post_perm_active_r <= 1'b1;
+                            post_perm_cnt_r    <= 2'd0;
+                        end
+                    end
+
+                    if (post_perm_active_r) begin
+                        if (pp_done)
+                            post_perm_active_r <= 1'b0;
+                        else
+                            post_perm_cnt_r <= post_perm_cnt_r + 2'd1;
+                    end
+                end
+
+                ST_AD: begin
+                    if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
+                        ad_last_seen_r <= 1'b1;
+                    end else if (phs && padded_tuser_i == TUSER_AD) begin
+                        if (padded_tlast_i) begin
+                            ad_last_seen_r <= 1'b1;
+                            perm_ctx_r     <= CTX_AD;
+                            ad_word_r      <= 1'b0;
+                        end else if (ad_word_r == 1'b1) begin
+                            // Intermediate block complete → trigger p^b
+                            perm_ctx_r <= CTX_AD;
+                            ad_word_r  <= 1'b0;
+                        end else begin
+                            ad_word_r <= 1'b1; // Word 0 → advance to word 1
+                        end
+                    end
+                end
+
+                //PT blcok word counter 
+                ST_PT_IN: begin
+                    if (phs) begin
+                        if (padded_tlast_i) begin
+                            dat_last_seen_r <= 1'b1;
+                            dat_word_r      <= 1'b0;
+                        end else if (dat_word_r == 1'b1) begin
+                            perm_ctx_r <= CTX_DATA;
+                            dat_word_r <= 1'b0;
+                        end else begin
+                            dat_word_r <= 1'b1;
+                        end
+                    end
+                end
+
+                // CP block word counter 
+                ST_CT_IN: begin
+                    if (phs) begin
+                        if (padded_tlast_i) begin
+                            dat_last_seen_r <= 1'b1;
+                            dat_word_r      <= 1'b0;
+                        end else if (dat_word_r == 1'b1) begin
+                            perm_ctx_r <= CTX_DATA;
+                            dat_word_r <= 1'b0;
+                        end else begin
+                            dat_word_r <= 1'b1;
+                        end
+                    end
+                end
+
+
+                ST_TAG_INIT: begin
+                    if (tag_init_cnt_r < 2'd2)
+                        tag_init_cnt_r <= tag_init_cnt_r + 2'd1;
+
+                    if (tag_init_cnt_r == 2'd1)
+                        perm_ctx_r <= CTX_FINAL; 
+
+                    if (tag_init_cnt_r == 2'd2)
+                        tag_init_cnt_r <= 2'd0;
+                end
+
+                // tag output counter 
+                ST_ENC_TAG: begin
+                    if (m_axis_tvalid_o && m_axis_tready_i)
+                        tag_cnt_r <= ~tag_cnt_r;
+                end
+
+                 ST_DEC_TAG: begin
+                    if (phs) begin
+                        rx_tag_r[tag_cnt_r] <= padded_tdata_i;
+                        tag_cnt_r           <= ~tag_cnt_r;
+                    end
+                end
+
+
+                //Tag comparison 
+                  ST_VERIFY: begin
+                    case (verify_cnt_r)
+                        2'd0: begin
+                            if (core_data_i != rx_tag_r[0]) tag_ok_r <= 1'b0;
+                            verify_cnt_r <= 2'd1;
+                        end
+                        2'd1: begin
+                            if (core_data_i != rx_tag_r[1]) tag_ok_r <= 1'b0;
+                            verify_cnt_r <= 2'd2;
+                        end
+                        default: ; //cnt=2: hold until state → ST_DONE
+                    endcase
+                end
+
+                default: ;
+            endcase
+            end
+        end
 
 
 
