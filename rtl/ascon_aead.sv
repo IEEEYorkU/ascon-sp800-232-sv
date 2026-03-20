@@ -48,9 +48,7 @@
  * Ref: NIST SP 800-232, Section 4
  */
 
-
 import ascon_pkg::*;
-
 
 module ascon_aead(
     //Clock, reset
@@ -68,9 +66,10 @@ module ascon_aead(
 
     //Interface
     input  logic                ascon_ready_i,
+    input  ascon_word_t         core_data_i,   // Read state from core for Decryption/Tag
     output logic                start_perm_o,
     output logic                round_config_o,
-    output logic     [2:0]      word_sel_o,  // target state word address S0,S1,.., S4
+    output logic     [2:0]      word_sel_o,  // Target state word address S0,S1,.., S4
     output ascon_word_t         data_o,
     output logic                write_en_o,
     output logic                xor_en_o,
@@ -108,6 +107,7 @@ module ascon_aead(
 
 );
 
+    // Ascon-128a Parameters (r=128, a=12, b=8)
     localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
     localparam ascon_word_t DSEP       = 64'h0000000000000001; // Domain separation: S ← S ⊕ (0^319 ∥ 1), only s4 change, s0,s1,s2,s3 are full of 0
     localparam logic ROUND_PA = 1'b1;  //12 round permutaiton
@@ -144,7 +144,7 @@ module ascon_aead(
 //==========================================================================
     // Register
     // Register
-//==========================================================================
+    //==========================================================================
 
     state_t    state_r;
     perm_ctx_t perm_ctx_r;
@@ -172,13 +172,13 @@ module ascon_aead(
     logic    ad_word_r;
     logic    ad_last_seen_r;
 
-    //PT/CT absorption
+    // PT/CT absorption
     logic    dat_word_r;
     //PT/CT absorption
     logic    dat_word_r;
 
-    //Finalization
-    logic [1:0] tag_init_cnt_r; //0=K->S3 XOR, 1=K->S4 XOR, 2=transition to PERM
+    // Finalization
+    logic [1:0] tag_init_cnt_r; // 0=K->S3 XOR, 1=K->S4 XOR, 2=transition to PERM
 
     //Tag output(enc) and tag receive (dexc)
     logic tag_cnt_r;  //0=S3/T_word0, 1=S4/T_word1
@@ -192,7 +192,7 @@ module ascon_aead(
     // Stored key captured during INIT
     ascon_word_t key_r[0:1];
 
-    //dec only: received tag words
+    // dec only: received tag words
     ascon_word_t rx_tag_r[0:1];
 
     // Stored key captured during INIT
@@ -273,7 +273,7 @@ module ascon_aead(
 //==========================================================================
     // NEXT-STATE Logic
     // NEXT-STATE Logic
-//==========================================================================
+    //==========================================================================
 
     logic init_ack;
     assign init_ack = (state_r == ST_INIT) &&
@@ -555,7 +555,7 @@ module ascon_aead(
         padded_tready_o    = 1'b0;
         m_axis_tdata_o  = 64'd0;
         m_axis_tkeep_o  = 8'hFF;
-        m_axis_tuser_o  = 3'd0;
+        m_axis_tuser_o  = 4'd0;
         m_axis_tlast_o  = 1'b0;
         m_axis_tvalid_o = 1'b0;
 
@@ -626,7 +626,7 @@ module ascon_aead(
             end
         end
         end
-//==============================================================================
+   //==============================================================================
    /*
    ST_PERM — Shared Permutation State
 
@@ -685,8 +685,8 @@ module ascon_aead(
                 end
             end
 
-//============================================================================
-            // AD: XOR each AD word into S0 (word 0) or S1 (word 1).
+    //============================================================================
+    // AD: XOR each AD word into S0 (word 0) or S1 (word 1).
             ST_AD: begin
                 padded_tready_o = 1'b1;
                 if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
@@ -707,8 +707,8 @@ module ascon_aead(
                 end
             end
 
-//============================================================================
-            // PT_IN: XOR PT into state, simultaneously output CT.
+    //============================================================================
+    // PT_IN: XOR PT into state, simultaneously output CT.
             ST_PT_IN: begin
                 padded_tready_o = m_axis_tready_i;
                 if (padded_tvalid_i && m_axis_tready_i) begin
@@ -723,8 +723,8 @@ module ascon_aead(
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
-//============================================================================
-            //CT_IN: Overwrite state with CT, simultaneously output PT.
+    //============================================================================
+    // CT_IN: Overwrite state with CT, simultaneously output PT.
             ST_CT_IN: begin
                 padded_tready_o = m_axis_tready_i;
                 if (padded_tvalid_i && m_axis_tready_i) begin
@@ -741,8 +741,8 @@ module ascon_aead(
                 end
             end
 
-//============================================================================
-            // TAG_INIT: Pre-final-permutation key XOR.
+    //============================================================================
+    // TAG_INIT: Pre-final-permutation key XOR.
             ST_TAG_INIT: begin
                 if (tag_init_cnt_r < 2'd2) begin
                     write_en_o    = 1'b1;
@@ -753,8 +753,8 @@ module ascon_aead(
                 end
             end
 
-//============================================================================
-            // ENC_TAG: Output computed tag words: S3 (cnt=0) then S4 (cnt=1).
+    //============================================================================
+    // ENC_TAG: Output computed tag words: S3 (cnt=0) then S4 (cnt=1).
             ST_ENC_TAG: begin
                 m_axis_tvalid_o = 1'b1;
                 m_axis_tkeep_o  = 8'hFF;
@@ -764,19 +764,19 @@ module ascon_aead(
                 m_axis_tdata_o  = core_data_i;
             end
 
-//============================================================================
-            // DEC_TAG: Accept two incoming tag words for later comparison.
+    //============================================================================
+    // DEC_TAG: Accept two incoming tag words for later comparison.
             ST_DEC_TAG: begin
                 padded_tready_o = 1'b1;
             end
 
-//============================================================================
-            // VERIFY: Drive word_sel to read S3 (cnt=0) then S4 (cnt=1).
+    //============================================================================
+    // VERIFY: Drive word_sel to read S3 (cnt=0) then S4 (cnt=1).
             ST_VERIFY: begin
                 word_sel_o = (verify_cnt_r == 2'd0) ? 3'd3 : 3'd4;
             end
 
-//============================================================================
+    //============================================================================
             ST_DONE: begin
                 busy_o     = 1'b0;
                 done_o     = 1'b1;
@@ -787,9 +787,6 @@ module ascon_aead(
         endcase
     end
     end
-
-
-
 
 
 
