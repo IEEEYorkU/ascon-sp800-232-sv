@@ -97,10 +97,10 @@ module ascon_aead(
     input logic             m_axis_tready_i
 );
 
-    localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001 
-    localparam ascon_word_t DSEP       = 64'h0000000000000001; // Domain separation: S ← S ⊕ (0^319 ∥ 1), only s4 change, s0,s1,s2,s3 are full of 0
-    localparam logic ROUND_PA = 1'b1;  //12 round permutaiton 
-    localparam logic ROUND_PB = 1'b0;  //8 round permuation 
+    localparam ascon_word_t     localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
+    localparam logic ROUND_PA = 1'b1;  //12 round permutaiton
+    localparam logic ROUND_PB = 1'b0;  //8 round permuation
+    typedef enum logic [3:0] {
 
 
     typedef enum logic [3:0] { 
