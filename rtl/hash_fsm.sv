@@ -66,6 +66,9 @@ module hash_fsm (
     } state_t;
     state_t state, next_state;
 
+    logic [2:0] word_cnt, next_word_cnt;
+    logic       is_final_perm, next_is_final_perm;
+
     // (State machine logic goes here)
 
     // =======================================================================
@@ -73,9 +76,13 @@ module hash_fsm (
     // =======================================================================
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            state <= STATE_IDLE;
+            state         <= STATE_IDLE;
+            word_cnt      <= 3'd0;
+            is_final_perm <= 1'b0;
         end else begin
-            state <= next_state;
+            state         <= next_state;
+            word_cnt      <= next_word_cnt;
+            is_final_perm <= next_is_final_perm;
         end
     end
 
@@ -83,44 +90,56 @@ module hash_fsm (
     // NEXT STATE DECODER
     // =======================================================================
     always_comb begin
-        next_state = state;
+        next_state         = state;
+        next_word_cnt      = word_cnt;
+        next_is_final_perm = is_final_perm;
 
-        unique case (state)
+        case (state)
             STATE_IDLE: begin
                 if (start_i) next_state = STATE_INIT;
             end
 
             STATE_INIT: begin
-                // Wait until all 5 IV words are loaded
-                if (word_cnt == 3'd4) next_state = STATE_PERM;
+                if (word_cnt == 3'd4) begin
+                    next_word_cnt = 3'd0;
+                    next_state    = STATE_PERM;
+                end else begin
+                    next_word_cnt = word_cnt + 3'd1;
+                end
             end
 
             STATE_PERM: begin
-                // Wait for the Core to finish the permutation cycles
                 if (ascon_ready_i) begin
-                    // If we just finished INIT or intermediate ABSORB
-                    if (!padded_tlast_i)
-                        next_state = STATE_ABSORB;
-                    else
-                        next_state = STATE_SQUEEZE;
+                    if (is_final_perm) begin
+                        next_state    = STATE_SQUEEZE;
+                        next_word_cnt = 3'd0;
+                    end else begin
+                        next_state    = STATE_ABSORB;
+                    end
                 end
             end
 
             STATE_ABSORB: begin
-                // Handshake with Padder; if data is consumed, permute it
-                if (padded_tvalid_i && ascon_ready_i) begin
+                if (padded_tvalid_i && padded_tready_o) begin
                     next_state = STATE_PERM;
+                    if (padded_tlast_i) next_is_final_perm = 1'b1;
                 end
             end
 
             STATE_SQUEEZE: begin
-                // Handshake with Master; if data is sent, check if done
-                if (m_axis_tready_i) begin
-                    if (squeeze_cnt == 3'd3 || abort_i)
-                        next_state = STATE_IDLE;
-                    else
-                        next_state = STATE_PERM;
+                if (m_axis_tready_i && m_axis_tvalid_o) begin
+                    // Condition for Hash256 (4 words) or XOF abort
+                    if (word_cnt == 3'd3 || abort_i) begin
+                        next_state = STATE_DONE;
+                    end else begin
+                        next_word_cnt = word_cnt + 3'd1;
+                        next_state    = STATE_PERM;
+                    end
                 end
+            end
+
+            STATE_DONE: begin
+                next_state = STATE_IDLE;
             end
 
             default: next_state = STATE_IDLE;
@@ -153,12 +172,15 @@ module hash_fsm (
 
             STATE_INIT: begin
                 write_en_o = 1'b1;
-                // data_o logic should be assigned here based on word_cnt
-                // e.g., data_o = ASCON_HASH_IV[word_cnt];
+                case (mode_i)
+                    ASCON_HASH: data_o = ASCON_HASH_IV[word_cnt];
+                    ASCON_XOF:  data_o = ASCON_XOF_IV[word_cnt];
+                    default:    data_o = ASCON_HASH_IV[word_cnt];
+                endcase
             end
 
             STATE_PERM: begin
-                // Signal the core to start the p12/p8 permutation
+                // Trigger permutation if core is idle
                 if (ascon_ready_i) start_perm_o = 1'b1;
             end
 
@@ -169,11 +191,13 @@ module hash_fsm (
 
             STATE_SQUEEZE: begin
                 m_axis_tvalid_o = 1'b1;
-                // Last block signal for AXI-Stream
-                if (squeeze_cnt == 3'd3 || abort_i) begin
+                if (word_cnt == 3'd3 || abort_i) begin
                     m_axis_tlast_o = 1'b1;
-                    done_o = 1'b1;
                 end
+            end
+
+            STATE_DONE: begin
+                done_o = 1'b1;
             end
         endcase
     end
