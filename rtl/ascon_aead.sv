@@ -74,7 +74,7 @@ module ascon_aead(
     output ascon_word_t         data_o,
     input ascon_word_t          core_data_i,
     output logic                write_en_o,    
-    output logic                xỏ_en_o,
+    output logic                xor_en_o,
     output data_sel_t           in_data_sel_o,  //Mux select for core data_i source
 
     // AD- AXI STREAM from padder unit
@@ -142,7 +142,7 @@ module ascon_aead(
 
     //PT/CT absorption
     logic    dat_word_r;
-    logic    dat_last_seen_r
+    logic    dat_last_seen_r;
 
     //Finalization
     logic [1:0] tag_init_cnt_r; //0=K->S3 XOR, 1=K->S4 XOR, 2=transition to PERM
@@ -345,7 +345,7 @@ module ascon_aead(
         padded_tready_o    = 1'b0;
         m_axis_tdata_o  = 64'd0;
         m_axis_tkeep_o  = 8'hFF;
-        m_axis_tuser_o  = 3'd0;
+        m_axis_tuser_o  = 4'd0;
         m_axis_tlast_o  = 1'b0;
         m_axis_tvalid_o = 1'b0;
 
@@ -702,7 +702,7 @@ module ascon_aead(
                 end
 
                  ST_DEC_TAG: begin
-                    if (phs) begin
+                    if (phs && padded_tuser_i == TUSER_TAG) begin
                         rx_tag_r[tag_cnt_r] <= padded_tdata_i;
                         tag_cnt_r           <= ~tag_cnt_r;
                     end
