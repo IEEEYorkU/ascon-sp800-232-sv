@@ -90,7 +90,17 @@ module ascon_aead(
 
     // Plaintext / Ciphertext - AX4 stream from padder unit
     output ascon_word_t     m_axis_tdata_o,
+    output logic [2:0]      m_axis_tuser_o,
+    output logic            m_axis_tlast_o,
+    output logic            m_axis_tvalid_o,
+
+
+    // Plaintext / Ciphertext - AX4 stream from padder unit
+    output ascon_word_t     m_axis_tdata_o,
     output logic [7:0]      m_axis_tkeep_o,
+    output logic [2:0]      m_axis_tuser_o,
+    output logic            m_axis_tlast_o,
+    output logic            m_axis_tvalid_o,
     output logic [2:0]      m_axis_tuser_o,
     output logic            m_axis_tlast_o,
     output logic            m_axis_tvalid_o,
@@ -104,6 +114,7 @@ module ascon_aead(
 
 
     typedef enum logic [3:0] {
+    typedef enum logic [3:0] {
         ST_IDLE     = 4'd0,
         ST_INIT     = 4'd1,
         ST_PERM     = 4'd2,
@@ -116,25 +127,38 @@ module ascon_aead(
         ST_VERIFY   = 4'd9,
         ST_DONE     = 4'd10
         //ST_ERROR    = 4'd11
+        //ST_ERROR    = 4'd11
     } state_t;
 
     typedef enum logic [1:0] {
+    typedef enum logic [1:0] {
         CTX_INIT  = 2'd0, //12 round permutation after initialization loading
         CTX_AD    = 2'd1, // 8 round permutation after each AD BLock
+        CTX_DATA  = 2'd2, // 8 round permutation after each non-final PT/Ct block
+        CTX_FINAL = 2'd3  // 8 round permutation during finalization
         CTX_DATA  = 2'd2, // 8 round permutation after each non-final PT/Ct block
         CTX_FINAL = 2'd3  // 8 round permutation during finalization
     } perm_ctx_t;
 
 //==========================================================================
     // Register
+    // Register
 //==========================================================================
 
+    state_t    state_r;
+    perm_ctx_t perm_ctx_r;
     state_t    state_r;
     perm_ctx_t perm_ctx_r;
 
     //INIT Phase: tracks which word is being loaded into the core
     logic [2:0] init_cnt_r;
+    //INIT Phase: tracks which word is being loaded into the core
+    logic [2:0] init_cnt_r;
 
+    //PERM phase management
+    logic        perm_started_r;
+    logic        post_perm_active_r;
+    logic [1:0]  post_perm_cnt_r;
     //PERM phase management
     logic        perm_started_r;
     logic        post_perm_active_r;
@@ -143,7 +167,12 @@ module ascon_aead(
     //AD absorption
     logic    ad_word_r;
     logic    ad_last_seen_r;
+    //AD absorption
+    logic    ad_word_r;
+    logic    ad_last_seen_r;
 
+    //PT/CT absorption
+    logic    dat_word_r;
     //PT/CT absorption
     logic    dat_word_r;
 
@@ -152,7 +181,10 @@ module ascon_aead(
 
     //Tag output(enc) and tag receive (dexc)
     logic tag_cnt_r;  //0=S3/T_word0, 1=S4/T_word1
+    //Tag output(enc) and tag receive (dexc)
+    logic tag_cnt_r;  //0=S3/T_word0, 1=S4/T_word1
 
+    // Tag verification
     // Tag verification
     logic [1:0] verify_cnt_r;  // 0=compare S3, 1=compare S4, 2=done
 
@@ -162,19 +194,36 @@ module ascon_aead(
     //dec only: received tag words
     ascon_word_t rx_tag_r[0:1];
 
+    // Stored key captured during INIT
+    ascon_word_t key_r[0:1];
+
+    //dec only: received tag words
+    ascon_word_t rx_tag_r[0:1];
+
+    //tag match result
+    logic tag_ok_r;
     //tag match result
     logic tag_ok_r;
 //==========================================================================
     //Combinational Helpers
+    //Combinational Helpers
 //==========================================================================
 
+
     logic is_enc;
+    assign is_enc = (mode_i == MODE_AEAD_ENC);
+
     assign is_enc = (mode_i == MODE_AEAD_ENC);
 
     //Permutation complete
     logic perm_done;
     assign perm_done = perm_started_r && ascon_ready_i;
+    assign perm_done = perm_started_r && ascon_ready_i;
 
+    //Max post-per counter value
+    logic [1:0] pp_max;
+    always_comb begin
+        case (perm_ctx_r)
     //Max post-per counter value
     logic [1:0] pp_max;
     always_comb begin
@@ -187,11 +236,14 @@ module ascon_aead(
     end
 
     logic pp_done;
+    logic pp_done;
     assign pp_done = post_perm_active_r && (post_perm_cnt_r == pp_max);
+
 
     // After finishing the permutation cycle, some States require additional operations.
     // CTX_INIT_perm: XOR K into S3, S4
     // CTX_AD_perm: XOR domain separation into S4
+    // CTX_FINAL_perm: XOR K into S3, S4
     // CTX_FINAL_perm: XOR K into S3, S4
     logic needs_post_perm;
     assign needs_post_perm = (perm_ctx_r == CTX_INIT)  ||
@@ -200,9 +252,16 @@ module ascon_aead(
 
 
 
+
+
 //==========================================================================
     // Sequential - FSM transitions and register latching
+    // Sequential - FSM transitions and register latching
 //==========================================================================
+
+    state_t next_state;
+    always_ff @(posedge clk or posedge rst) begin
+        if(rst) state_r <= ST_IDLE;
 
     state_t next_state;
     always_ff @(posedge clk or posedge rst) begin
@@ -211,6 +270,7 @@ module ascon_aead(
     end
 
 //==========================================================================
+    // NEXT-STATE Logic
     // NEXT-STATE Logic
 //==========================================================================
 
@@ -464,7 +524,21 @@ module ascon_aead(
 
 //==========================================================================
     // Output Decoder
+    // Output Decoder
 //==========================================================================
+
+    always_comb begin
+        busy_o             = 1'b1;
+        done_o             = 1'b0;
+        tag_fail_o         = 1'b0;
+        start_perm_o       = 1'b0;
+        round_config_o     = ROUND_PB;
+        word_sel_o         = 3'd0;
+        data_o             = 64'd0;
+        write_en_o         = 1'b0;
+        xor_en_o           = 1'b0;
+        in_data_sel_o      = DATA_IN_AXI_SEL;
+        padded_tready_o    = 1'b0;
 
     always_comb begin
         busy_o             = 1'b1;
@@ -485,10 +559,18 @@ module ascon_aead(
         m_axis_tvalid_o = 1'b0;
 
         case (state_r)
+        case (state_r)
 
             ST_IDLE: begin
                 busy_o = 1'b0;
+            ST_IDLE: begin
+                busy_o = 1'b0;
         end
+//==============================================================================
+        /*INIT state:
+        cnt=0: S0 <- IV <- 0x00001000808c0001
+        cnt=1,2: S1,S2 <- K
+        cnt=3,4: S3,S4 <- N
 //==============================================================================
         /*INIT state:
         cnt=0: S0 <- IV <- 0x00001000808c0001
@@ -500,7 +582,12 @@ module ascon_aead(
             if(init_cnt_r == 3'd0) begin
                 write_en_o     = ascon_ready_i;
                 xor_en_o       = 1'b0;
+        ST_INIT: begin
+            if(init_cnt_r == 3'd0) begin
+                write_en_o     = ascon_ready_i;
+                xor_en_o       = 1'b0;
                 in_data_sel_o  = DATA_IN_AEAD_SEL;
+                word_sel_o     = 3'd0;
                 word_sel_o     = 3'd0;
                 data_o         = AEAD128_IV;
             end
@@ -510,7 +597,14 @@ module ascon_aead(
                 if(padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
                     write_en_o     = 1'b1;
                     xor_en_o       = 1'b0;
+
+            else if (init_cnt_r <= 3'd2) begin
+                padded_tready_o = 1'b1;
+                if(padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
+                    write_en_o     = 1'b1;
+                    xor_en_o       = 1'b0;
                     in_data_sel_o  = DATA_IN_AXI_SEL;
+                    word_sel_o     = init_cnt_r[2:0];
                     word_sel_o     = init_cnt_r[2:0];
                 end
             end
@@ -520,22 +614,31 @@ module ascon_aead(
                 if(padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
                     write_en_o     = 1'b1;
                     xor_en_o       = 1'b0;
+                padded_tready_o = 1'b1;
+                if(padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
+                    write_en_o     = 1'b1;
+                    xor_en_o       = 1'b0;
                     in_data_sel_o  = DATA_IN_AXI_SEL;
+                    word_sel_o     = init_cnt_r[2:0];
                     word_sel_o     = init_cnt_r[2:0];
                 end
             end
+        end
         end
 //==============================================================================
    /*
    ST_PERM — Shared Permutation State
 
+
    Reused across all four permutation phases (CTX_INIT, CTX_AD, CTX_DATA,
    CTX_FINAL). Internally executes three sequential sub-phases:
+
 
    Sub-phase 1 (!perm_started_r):
    Asserts start_perm_o for one cycle and drives round_config_o with the
    correct round count based on perm_ctx_r:
    CTX_INIT/FINAL → ROUND_PA (12 rounds), CTX_AD/DATA → ROUND_PB (8 rounds).
+
 
    Sub-phase 2 (waiting):
    Idles while ascon_core executes its permutation rounds. No outputs are
@@ -547,7 +650,10 @@ module ascon_aead(
    CTX_INIT_perm: XOR K into S3, S4
    CTX_AD_perm: XOR domain separation into S4
    CTX_FINAL_perm: XOR K into S3, S4
+   CTX_FINAL_perm: XOR K into S3, S4
    */
+            ST_PERM: begin
+                if ( !perm_started_r) begin
             ST_PERM: begin
                 if ( !perm_started_r) begin
                   // Sub-phase 1: trigger permutation
@@ -623,6 +729,7 @@ module ascon_aead(
                 if (padded_tvalid_i && m_axis_tready_i) begin
                     write_en_o      = 1'b1;
                     xor_en_o        = 1'b0;
+                    xor_en_o        = 1'b0;
                     in_data_sel_o   = DATA_IN_AXI_SEL;
                     word_sel_o      = {2'b00, dat_word_r};
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
@@ -679,6 +786,9 @@ module ascon_aead(
         endcase
     end
     end
+
+
+
 
 
 
