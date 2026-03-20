@@ -55,7 +55,7 @@ import ascon_pkg::*;
 module ascon_aead(
     //Clock, reset    //Clock, reset
     input logic rst,
-    input logic rst, 
+    input logic rst,    input logic rst,
 //==========================================================================
     //Mode,Control
 //==========================================================================
