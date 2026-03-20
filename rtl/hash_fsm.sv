@@ -69,8 +69,9 @@ module hash_fsm (
     logic [2:0] word_cnt, next_word_cnt;
     logic       is_final_perm, next_is_final_perm;
 
-    localparam ascon_word_t ASCON_HASH_IV_WORD0 = 64'h00000080100cc0002;
-    localparam ascon_word_t ASCON_XOF_IV_WORD0  = 64'h00000080100c40002;
+    localparam ascon_word_t ASCON_HASH_IV_WORD0  = 64'h0000080100cc0002;
+    localparam ascon_word_t ASCON_XOF_IV_WORD0   = 64'h0000080000cc0003;
+    localparam ascon_word_t ASCON_CXOF_IV_WORD0  = 64'h0000080000cc0004;
 
     // (State machine logic goes here)
 
@@ -166,6 +167,7 @@ module hash_fsm (
         m_axis_tvalid_o    = 1'b0;
         m_axis_tlast_o     = 1'b0;
         m_axis_tkeep_o     = 8'hFF;
+        m_axis_tuser_o = padded_tuser_i;
         data_o             = 64'b0;
 
         case (state)
@@ -175,10 +177,14 @@ module hash_fsm (
 
             STATE_INIT: begin
                 write_en_o = 1'b1;
-            if (word_cnt == 3'd0) begin
-                data_o = (mode_i == ASCON_XOF) ? ASCON_XOF_IV_WORD0 : ASCON_HASH_IV_WORD0;
-            end else begin
-                data_o = 64'b0; // Words 1, 2, 3, and 4 are initialized to 0
+                if (word_cnt == 3'd0) begin
+                    case (mode_i)
+                        ASCON_XOF:  data_o = ASCON_XOF_IV_WORD0;
+                        ASCON_CXOF: data_o = ASCON_CXOF_IV_WORD0;
+                        default:    data_o = ASCON_HASH_IV_WORD0;
+                    endcase
+                end else begin
+                data_o = 64'b0;
             end
         end
 
@@ -188,8 +194,8 @@ module hash_fsm (
             end
 
             STATE_ABSORB: begin
-                padded_tready_o = ascon_ready_i;
-                xor_sel_o       = 2'b01; // Tells core to XOR padded_tdata into state
+                padded_tready_o = 1'b1; // Explicitly signal we are ready for the padder
+                if (padded_tvalid_i) xor_sel_o = 2'b01;
             end
 
             STATE_SQUEEZE: begin
