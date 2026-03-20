@@ -60,14 +60,14 @@ module ascon_aead(
     //Mode,Control
 //==========================================================================
 
-    input ascon_mode_t mode_i,  //Mode: ENC or DEC 
-    input logic        start_i,        
-    output logic       busy_o,     
-    output logic       done_o, 
-    output logic       tag_fail_o, //Decryption tag check fails 
-
-    //Interface 
-    input  logic                ascon_ready_i, 
+    input ascon_mode_t mode_i,  //Mode: ENC or DEC    input ascon_mode_t mode_i,  //Mode: ENC or DEC
+    input logic        start_i,
+    output logic       busy_o,
+    output logic       done_o,
+    output logic       tag_fail_o, //Decryption tag check fails
+    //Interface
+    input  logic                ascon_ready_i,
+    output logic                start_perm_o,
     output logic                start_perm_o, 
     output logic                round_config_o,
     output logic     [2:0]      word_sel_o,  // target state word address S0,S1,.., S4
