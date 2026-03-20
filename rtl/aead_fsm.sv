@@ -1,4 +1,4 @@
-/* Module Name: ascon_aead
+/* Module Name: aead_fsm
  * Author(s):  Rayhaan Yaser Mohammed, Tommy
  * Description: Ascon-AEAD128 Protocol Orchestrator FSM
  * The protocol orchestrator ("The Brain") for the Ascon-AEAD128 Authenticated
@@ -50,13 +50,13 @@
 
 import ascon_pkg::*;
 
-module ascon_aead(
-    //Clock, reset
-    input logic clk,
-    input logic rst,
-//==========================================================================
-    //Mode,Control
-//==========================================================================
+module aead_fsm(
+    input logic                 clk,
+    input logic                 rst,
+
+    //==========================================================================
+    // Mode Control
+    //==========================================================================
 
     input ascon_mode_t mode_i,  //Mode: ENC or DEC
     input logic        start_i,
