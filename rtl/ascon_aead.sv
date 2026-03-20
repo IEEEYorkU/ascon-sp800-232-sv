@@ -95,6 +95,7 @@ module ascon_aead(
 
     // Ascon-128a Parameters (r=128, a=12, b=8)
     localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
+    localparam ascon_word_t DSEP = 64'h0000000000000001; // DSEP <- 0x0000000000000001
     localparam logic ROUND_PA = 1'b1;  // 12 round permutation
     localparam logic ROUND_PB = 1'b0;  // 8 round permutation
 
