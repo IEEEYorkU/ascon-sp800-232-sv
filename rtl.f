@@ -10,3 +10,7 @@ rtl/ascon_core.sv
 
 # --- Ascon Padder ---
 rtl/ascon_padder.sv
+
+# --- AEAD and Top Level ---
+rtl/ascon_aead.sv
+rtl/ascon_top.sv
