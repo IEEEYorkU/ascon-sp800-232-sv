@@ -1,6 +1,6 @@
 /* Module Name: ascon_aead
- * Author(s):  
- * Description:
+ * Author(s):  Rayhaan Yaser Mohammed, Tommy
+ * Description: Ascon-AEAD128 Protocol Orchestrator FSM
  * The protocol orchestrator ("The Brain") for the Ascon-AEAD128 Authenticated
  * Encryption and Decryption Accelerator. This module implements Algorithm 3
  * (Authenticated Encryption) and Algorithm 4 (Authenticated Decryption) as
@@ -19,17 +19,18 @@
  * Implementation Details:
  * - State Machine: Implements 11 architectural states (ST_IDLE, ST_INIT,
  *   ST_PERM, ST_AD, ST_PT_IN, ST_CT_IN, ST_TAG_INIT, ST_ENC_TAG, ST_DEC_TAG,
- *   ST_VERIFY, ST_DONE) plus one defensive ST_ERROR state, built using the
- *   robust 4-process (State Register, Next-State Logic, Output
- *   Decoder, Action Logic) consistent with ascon_core.sv.
+ *   ST_VERIFY, ST_DONE) built as a split-control FSM with dedicated blocks
+ *   for state register, next-state logic, sequential side registers/action
+ *   latching, and output decoding.
  * - Shared Permutation State: ST_PERM is reused across all four permutation
  *   phases (initialization, associated data, processing ciphertext/plaintext, finalization). A
  *   perm_ctx_r register records which phase triggered the permutation and
  *   where to return upon completion.
  * - Post-Permutation Operations: Key XOR into S3/S4 (after CTX_INIT and
  *   CTX_FINAL) and domain separation into S4 (after CTX_AD last block) are
- *   performed within ST_PERM itself using a post_perm_cnt_r counter, avoiding
- *   the need for additional states and reducing overall FSM complexity.
+ *   performed within ST_PERM itself using a post_perm_cnt_r counter. For the
+ *   no-AD path, domain separation is injected once in ST_AD before advancing
+ *   to payload processing.
  * - Critical Spec Compliance: The final plaintext or ciphertext block does NOT
  *   trigger a permutation, per NIST SP 800-232 Algorithms 3 and 4. ST_PT_IN
  *   and ST_CT_IN transition directly to ST_TAG_INIT on padded_tlast, bypassing
@@ -81,7 +82,7 @@ module ascon_aead(
 
     input ascon_word_t     padded_tdata_i, //Pre-processed 
     input logic [7:0]      padded_tkeep_i, //Pass - through for CT 
-    input axit_tiser_t     padded_tuser_i, //Packet type
+    input axi_tuser_t      padded_tuser_i, //Packet type
     input logic            padded_tlast_i, //last word in the message 
     input logic            padded_tvalid_i,
     output logic            padded_tready_o, 
@@ -93,12 +94,13 @@ module ascon_aead(
     output logic [2:0]      m_axis_tuser_o, 
     output logic            m_axis_tlast_o, 
     output logic            m_axis_tvalid_o, 
-    input logic             m_axis_tready_i, 
+    input logic             m_axis_tready_i
+);
 
     localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001 
     localparam ascon_word_t DSEP       = 64'h0000000000000001; // Domain separation: S ← S ⊕ (0^319 ∥ 1), only s4 change, s0,s1,s2,s3 are full of 0
     localparam logic ROUND_PA = 1'b1;  //12 round permutaiton 
-    localparam logic ROUNF_PB = 1'b0;  //8 round permuation 
+    localparam logic ROUND_PB = 1'b0;  //8 round permuation 
 
 
     typedef enum logic [3:0] { 
@@ -112,7 +114,7 @@ module ascon_aead(
         ST_ENC_TAG  = 4'd7,
         ST_DEC_TAG  = 4'd8,
         ST_VERIFY   = 4'd9,
-        ST_DONE     = 4'd10,
+        ST_DONE     = 4'd10
         //ST_ERROR    = 4'd11 
     } state_t;
 
@@ -144,10 +146,9 @@ module ascon_aead(
 
     //PT/CT absorption 
     logic    dat_word_r; 
-    logic    dat_last_seen_r; 
 
     //Finalization
-    logic [1:0] tag_init_cnt_r; //0=K→S1 XOR, 1=K→S2 XOR, 2=transition to PERM
+    logic [1:0] tag_init_cnt_r; //0=K->S3 XOR, 1=K->S4 XOR, 2=transition to PERM
 
     //Tag output(enc) and tag receive (dexc) 
     logic tag_cnt_r;  //0=S3/T_word0, 1=S4/T_word1 
@@ -169,10 +170,6 @@ module ascon_aead(
     
     logic is_enc;
     assign is_enc = (mode_i == MODE_AEAD_ENC); 
-    
-    // Padded handshake: 
-    logic phs;
-    assign phs = padded_tvalid_i && padded_tready_o;
     
     //Permutation complete
     logic perm_done;
@@ -209,7 +206,7 @@ module ascon_aead(
     
     state_t next_state; 
     always_ff @(posedge clk or posedge rst) begin 
-        if(!rst) state_r <= ST_IDLE; 
+        if(rst) state_r <= ST_IDLE; 
         else state_r <=  next_state;
     end
 
@@ -249,7 +246,7 @@ module ascon_aead(
             end
 
             ST_PERM: begin
-                if (pp_done) begin
+                if (perm_done && (!needs_post_perm || pp_done)) begin
                     case (perm_ctx_r)
                         CTX_INIT : next_state = ST_AD;
                         CTX_AD   : next_state = is_enc ? ST_PT_IN : ST_CT_IN;
@@ -263,7 +260,9 @@ module ascon_aead(
             end
 
             ST_AD: begin
-                if (ad_word_valid && padded_tlast_i) begin
+                if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
+                    next_state = is_enc ? ST_PT_IN : ST_CT_IN;
+                end else if (ad_word_valid && padded_tlast_i) begin
                     next_state = ST_PERM;
                 end else begin
                     next_state = ST_AD;
@@ -341,7 +340,6 @@ module ascon_aead(
             ad_word_r          <= 1'b0;
             ad_last_seen_r     <= 1'b0;
             dat_word_r         <= 1'b0;
-            dat_last_seen_r    <= 1'b0;
             tag_init_cnt_r     <= 2'd0;
             tag_cnt_r          <= 1'b0;
             verify_cnt_r       <= 2'd0;
@@ -408,10 +406,8 @@ module ascon_aead(
             // PT/CT word pointer
             if ((state_r == ST_PT_IN && pt_word_valid) || (state_r == ST_CT_IN && ct_word_valid)) begin
                 dat_word_r <= ~dat_word_r;
-                dat_last_seen_r <= (state_r == ST_PT_IN) ? padded_tlast_i : padded_tlast_i;
             end else if (next_state == ST_PT_IN || next_state == ST_CT_IN) begin
                 dat_word_r <= 1'b0;
-                dat_last_seen_r <= 1'b0;
             end
 
             // TAG init counter
@@ -586,7 +582,17 @@ module ascon_aead(
             // AD: XOR each AD word into S0 (word 0) or S1 (word 1).
             ST_AD: begin
                 padded_tready_o = 1'b1;
-                if (padded_tvalid_i && padded_tuser_i == TUSER_AD) begin
+                if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
+                    // Do not consume the first non-AD beat in ST_AD.
+                    // Hold it for ST_PT_IN/ST_CT_IN after domain separation.
+                    padded_tready_o = 1'b0;
+                    // No AD present: apply domain separation once and proceed.
+                    write_en_o    = 1'b1;
+                    xor_en_o      = 1'b1;
+                    in_data_sel_o = DATA_IN_AEAD_SEL;
+                    word_sel_o    = 3'd4;
+                    data_o        = DSEP;
+                end else if (padded_tvalid_i && padded_tuser_i == TUSER_AD) begin
                     write_en_o    = 1'b1;
                     xor_en_o      = 1'b1;
                     in_data_sel_o = DATA_IN_AXI_SEL;
