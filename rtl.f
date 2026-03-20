@@ -15,7 +15,7 @@ rtl/ascon_padder.sv
 
 # 5. Ascon FSMs
 rtl/hash_fsm.sv
-# In progress: rtl/aead_fsm.sv
+rtl/aead_fsm.sv
 
 # 6. Helper Modules
 rtl/xor64.sv
