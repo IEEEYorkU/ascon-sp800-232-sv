@@ -52,7 +52,7 @@ run_all:
 	done
 
 # Rule for each testbench
-run_%: $(VECTOR_FILE)
+run_%: $(VECTOR_FILE) $(AEAD_VECTOR_FILE)
 	@echo "=== Running $* with $(SIM) ==="
 ifeq ($(SIM), verilator)
 	# --- VERILATOR FLOW ---
