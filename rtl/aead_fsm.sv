@@ -1,5 +1,5 @@
 /* Module Name: aead_fsm
- * Author(s):  Rayhaan Yaser Mohammed, Tommy
+ * Author(s):  Rayhaan, Tommy, Arthur
  * Description: Ascon-AEAD128 Protocol Orchestrator FSM
  * The protocol orchestrator ("The Brain") for the Ascon-AEAD128 Authenticated
  * Encryption and Decryption Accelerator. This module implements Algorithm 3
@@ -58,13 +58,13 @@ module aead_fsm(
     // Mode Control
     //==========================================================================
 
-    input ascon_mode_t mode_i,  //Mode: ENC or DEC
-    input logic        start_i,
-    output logic       busy_o,
-    output logic       done_o,
-    output logic       tag_fail_o, //Decryption tag check fails
+    input ascon_mode_t          mode_i,  // Mode: ENC or DEC
+    input logic                 start_i,
+    output logic                busy_o,
+    output logic                done_o,
+    output logic                tag_fail_o, // Decryption tag check fails
 
-    //Interface
+    // Internal Core Interface
     input  logic                ascon_ready_i,
     input  ascon_word_t         core_data_i,   // Read state from core for Decryption/Tag
     output logic                start_perm_o,
@@ -203,13 +203,10 @@ module aead_fsm(
 
     //tag match result
     logic tag_ok_r;
-    //tag match result
-    logic tag_ok_r;
-//==========================================================================
-    //Combinational Helpers
-    //Combinational Helpers
-//==========================================================================
 
+    //==========================================================================
+    // Combinational Helpers
+    //==========================================================================
 
     logic is_enc;
     assign is_enc = (mode_i == MODE_AEAD_ENC);
@@ -221,11 +218,11 @@ module aead_fsm(
     assign perm_done = perm_started_r && ascon_ready_i;
     assign perm_done = perm_started_r && ascon_ready_i;
 
-    //Max post-per counter value
-    logic [1:0] pp_max;
-    always_comb begin
-        case (perm_ctx_r)
-    //Max post-per counter value
+    // Padder handshake pulse
+    logic phs;
+    assign phs = padded_tvalid_i && padded_tready_o;
+
+    // Max post-per counter value
     logic [1:0] pp_max;
     always_comb begin
         case (perm_ctx_r)
@@ -247,9 +244,9 @@ module aead_fsm(
     // CTX_FINAL_perm: XOR K into S3, S4
     // CTX_FINAL_perm: XOR K into S3, S4
     logic needs_post_perm;
-    assign needs_post_perm = (perm_ctx_r == CTX_INIT)  ||
-                             (perm_ctx_r == CTX_FINAL)  ||
-                             (perm_ctx_r == CTX_AD && ad_last_seen_r);
+    assign needs_post_perm =    (perm_ctx_r == CTX_INIT)  ||
+                                (perm_ctx_r == CTX_FINAL)  ||
+                                (perm_ctx_r == CTX_AD && ad_last_seen_r);
 
 
 
@@ -276,10 +273,10 @@ module aead_fsm(
     //==========================================================================
 
     logic init_ack;
-    assign init_ack = (state_r == ST_INIT) &&
-                      ((init_cnt_r == 3'd0 && ascon_ready_i) ||
-                       ((init_cnt_r <= 3'd2) && padded_tvalid_i && padded_tuser_i == TUSER_KEY && padded_tready_o) ||
-                       ((init_cnt_r >= 3'd3 && init_cnt_r <= 3'd4) && padded_tvalid_i && padded_tuser_i == TUSER_NONCE && padded_tready_o));
+    assign init_ack =   (state_r == ST_INIT) &&
+                        ((init_cnt_r == 3'd0 && ascon_ready_i) ||
+                        ((init_cnt_r <= 3'd2) && padded_tvalid_i && padded_tuser_i == TUSER_KEY && padded_tready_o) ||
+                        ((init_cnt_r >= 3'd3 && init_cnt_r <= 3'd4) && padded_tvalid_i && padded_tuser_i == TUSER_NONCE && padded_tready_o));
 
     logic ad_word_valid;
     assign ad_word_valid = (state_r == ST_AD && padded_tvalid_i && padded_tuser_i == TUSER_AD && padded_tready_o);
@@ -294,10 +291,14 @@ module aead_fsm(
         next_state = state_r;
 
         case (state_r)
+            //==============================================================================
+            // IDLE: Wait for start pulse from top-level controller.
             ST_IDLE: begin
                 if (start_i) next_state = ST_INIT;
             end
 
+            //==============================================================================
+            // INIT: Advance after IV/K/N loading sequence completes.
             ST_INIT: begin
                 if (init_cnt_r == 3'd4 && init_ack) begin
                     next_state = ST_PERM;
@@ -306,6 +307,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // PERM: Wait for permutation completion and dispatch by permutation context.
             ST_PERM: begin
                 if (perm_done && (!needs_post_perm || pp_done)) begin
                     case (perm_ctx_r)
@@ -320,6 +323,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // AD: Absorb AD blocks, then move to payload path (ENC->PT_IN, DEC->CT_IN).
             ST_AD: begin
                 if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
                     next_state = is_enc ? ST_PT_IN : ST_CT_IN;
@@ -330,6 +335,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // PT_IN: Encrypt payload; final word goes to finalization setup.
             ST_PT_IN: begin
                 if (pt_word_valid) begin
                     if (padded_tlast_i) next_state = ST_TAG_INIT;
@@ -339,6 +346,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // CT_IN: Decrypt payload; final word goes to finalization setup.
             ST_CT_IN: begin
                 if (ct_word_valid) begin
                     if (padded_tlast_i) next_state = ST_TAG_INIT;
@@ -348,6 +357,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // TAG_INIT: Perform pre-final-permutation key XOR steps.
             ST_TAG_INIT: begin
                 if (tag_init_cnt_r == 2'd2) begin
                     next_state = ST_PERM;
@@ -356,6 +367,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // ENC_TAG: Stream out computed tag words S3 and S4.
             ST_ENC_TAG: begin
                 if (m_axis_tvalid_o && m_axis_tready_i && tag_cnt_r == 1'b1) begin
                     next_state = ST_DONE;
@@ -364,6 +377,8 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // DEC_TAG: Receive two tag words before verification.
             ST_DEC_TAG: begin
                 if (tag_cnt_r == 1'b1 && padded_tvalid_i && padded_tready_o && padded_tuser_i == TUSER_TAG) begin
                     next_state = ST_VERIFY;
@@ -372,11 +387,15 @@ module aead_fsm(
                 end
             end
 
+            //==============================================================================
+            // VERIFY: Compare received and computed tag words over two cycles.
             ST_VERIFY: begin
                 if (verify_cnt_r == 2'd2) next_state = ST_DONE;
                 else next_state = ST_VERIFY;
             end
 
+            //==============================================================================
+            // DONE: Hold completion flags until start_i deasserts.
             ST_DONE: begin
                 if (!start_i) next_state = ST_IDLE;
                 else next_state = ST_DONE;
@@ -564,103 +583,70 @@ module aead_fsm(
 
             ST_IDLE: begin
                 busy_o = 1'b0;
-            ST_IDLE: begin
-                busy_o = 1'b0;
-        end
-//==============================================================================
-        /*INIT state:
-        cnt=0: S0 <- IV <- 0x00001000808c0001
-        cnt=1,2: S1,S2 <- K
-        cnt=3,4: S3,S4 <- N
-//==============================================================================
-        /*INIT state:
-        cnt=0: S0 <- IV <- 0x00001000808c0001
-        cnt=1,2: S1,S2 <- K
-        cnt=3,4: S3,S4 <- N
-        */
-
-        ST_INIT: begin
-            if(init_cnt_r == 3'd0) begin
-                write_en_o     = ascon_ready_i;
-                xor_en_o       = 1'b0;
-        ST_INIT: begin
-            if(init_cnt_r == 3'd0) begin
-                write_en_o     = ascon_ready_i;
-                xor_en_o       = 1'b0;
-                in_data_sel_o  = DATA_IN_AEAD_SEL;
-                word_sel_o     = 3'd0;
-                word_sel_o     = 3'd0;
-                data_o         = AEAD128_IV;
             end
 
-            else if (init_cnt_r <= 3'd2) begin
-                padded_tready_o = 1'b1;
-                if(padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
-                    write_en_o     = 1'b1;
+            //==============================================================================
+            /*
+                INIT state:
+                cnt=0: S0 <- IV <- 0x00001000808c0001
+                cnt=1,2: S1,S2 <- K
+                cnt=3,4: S3,S4 <- N
+            */
+            ST_INIT: begin
+                if (init_cnt_r == 3'd0) begin
+                    write_en_o     = ascon_ready_i;
                     xor_en_o       = 1'b0;
-
-            else if (init_cnt_r <= 3'd2) begin
-                padded_tready_o = 1'b1;
-                if(padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
-                    write_en_o     = 1'b1;
-                    xor_en_o       = 1'b0;
-                    in_data_sel_o  = DATA_IN_AXI_SEL;
-                    word_sel_o     = init_cnt_r[2:0];
-                    word_sel_o     = init_cnt_r[2:0];
+                    in_data_sel_o  = DATA_IN_AEAD_SEL;
+                    word_sel_o     = 3'd0;
+                    data_o         = AEAD128_IV;
+                end else if (init_cnt_r <= 3'd2) begin
+                    padded_tready_o = 1'b1;
+                    if (padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
+                        write_en_o     = 1'b1;
+                        xor_en_o       = 1'b0;
+                        in_data_sel_o  = DATA_IN_AXI_SEL;
+                        word_sel_o     = init_cnt_r[2:0];
+                    end
+                end else begin
+                    padded_tready_o = 1'b1;
+                    if (padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
+                        write_en_o     = 1'b1;
+                        xor_en_o       = 1'b0;
+                        in_data_sel_o  = DATA_IN_AXI_SEL;
+                        word_sel_o     = init_cnt_r[2:0];
+                    end
                 end
             end
 
-            else begin
-                padded_tready_o = 1'b1;
-                if(padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
-                    write_en_o     = 1'b1;
-                    xor_en_o       = 1'b0;
-                padded_tready_o = 1'b1;
-                if(padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
-                    write_en_o     = 1'b1;
-                    xor_en_o       = 1'b0;
-                    in_data_sel_o  = DATA_IN_AXI_SEL;
-                    word_sel_o     = init_cnt_r[2:0];
-                    word_sel_o     = init_cnt_r[2:0];
-                end
-            end
-        end
-        end
-   //==============================================================================
-   /*
-   ST_PERM — Shared Permutation State
+            //==============================================================================
+            /*
+                ST_PERM - Shared Permutation State
 
+                Reused across all four permutation phases (CTX_INIT, CTX_AD, CTX_DATA,
+                CTX_FINAL). Internally executes three sequential sub-phases:
 
-   Reused across all four permutation phases (CTX_INIT, CTX_AD, CTX_DATA,
-   CTX_FINAL). Internally executes three sequential sub-phases:
+                Sub-phase 1 (!perm_started_r):
+                Asserts start_perm_o for one cycle and drives round_config_o with the
+                correct round count based on perm_ctx_r:
+                CTX_INIT/FINAL -> ROUND_PA (12 rounds), CTX_AD/DATA -> ROUND_PB (8 rounds).
 
+                Sub-phase 2 (waiting):
+                Idles while ascon_core executes its permutation rounds. No outputs are
+                driven. A one-cycle gap exists between perm_done and post_perm_active_r
+                becoming active due to the registered nature of post_perm_active_r.
 
-   Sub-phase 1 (!perm_started_r):
-   Asserts start_perm_o for one cycle and drives round_config_o with the
-   correct round count based on perm_ctx_r:
-   CTX_INIT/FINAL → ROUND_PA (12 rounds), CTX_AD/DATA → ROUND_PB (8 rounds).
-
-
-   Sub-phase 2 (waiting):
-   Idles while ascon_core executes its permutation rounds. No outputs are
-   driven. A one-cycle gap exists between perm_done and post_perm_active_r
-   becoming active due to the registered nature of post_perm_active_r.
-
-   Sub-phase 3 (post_perm_active_r):
-   Performs post-permutation XOR writes into the state using post_perm_cnt_r:
-   CTX_INIT_perm: XOR K into S3, S4
-   CTX_AD_perm: XOR domain separation into S4
-   CTX_FINAL_perm: XOR K into S3, S4
-   CTX_FINAL_perm: XOR K into S3, S4
-   */
+                Sub-phase 3 (post_perm_active_r):
+                Performs post-permutation XOR writes into the state using post_perm_cnt_r:
+                CTX_INIT_perm: XOR K into S3, S4
+                CTX_AD_perm: XOR domain separation into S4
+                CTX_FINAL_perm: XOR K into S3, S4
+            */
             ST_PERM: begin
-                if ( !perm_started_r) begin
-            ST_PERM: begin
-                if ( !perm_started_r) begin
-                  // Sub-phase 1: trigger permutation
+                if (!perm_started_r) begin
+                    // Sub-phase 1: trigger permutation
                     start_perm_o   = 1'b1;
                     round_config_o = (perm_ctx_r == CTX_INIT || perm_ctx_r == CTX_FINAL)
-                                     ? ROUND_PA : ROUND_PB;
+                                        ? ROUND_PA : ROUND_PB;
 
                 end else if (post_perm_active_r) begin
                     // Sub-phase 3: post-perm XOR writes into state
@@ -670,8 +656,8 @@ module aead_fsm(
 
                     case (perm_ctx_r)
                         CTX_INIT, CTX_FINAL: begin
-                            // cnt=0:  XOR K into S3
-                            // cnt=1:  XOR K into S4
+                            // cnt=0: XOR K into S3
+                            // cnt=1: XOR K into S4
                             word_sel_o = (post_perm_cnt_r == 2'd0) ? 3'd3 : 3'd4;
                             data_o     = (post_perm_cnt_r == 2'd0) ? key_r[0] : key_r[1];
                         end
@@ -685,8 +671,7 @@ module aead_fsm(
                 end
             end
 
-    //============================================================================
-    // AD: XOR each AD word into S0 (word 0) or S1 (word 1).
+            // AD: XOR each AD word into S0 (word 0) or S1 (word 1).
             ST_AD: begin
                 padded_tready_o = 1'b1;
                 if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
@@ -703,12 +688,11 @@ module aead_fsm(
                     write_en_o    = 1'b1;
                     xor_en_o      = 1'b1;
                     in_data_sel_o = DATA_IN_AXI_SEL;
-                    word_sel_o    = {2'b00, ad_word_r}; //0=S0, 1=S1
+                    word_sel_o    = {2'b00, ad_word_r}; // 0=S0, 1=S1
                 end
             end
 
-    //============================================================================
-    // PT_IN: XOR PT into state, simultaneously output CT.
+            // PT_IN: XOR PT into state, simultaneously output CT.
             ST_PT_IN: begin
                 padded_tready_o = m_axis_tready_i;
                 if (padded_tvalid_i && m_axis_tready_i) begin
@@ -723,8 +707,9 @@ module aead_fsm(
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
-    //============================================================================
-    // CT_IN: Overwrite state with CT, simultaneously output PT.
+
+
+            // CT_IN: Overwrite state with CT, simultaneously output PT.
             ST_CT_IN: begin
                 padded_tready_o = m_axis_tready_i;
                 if (padded_tvalid_i && m_axis_tready_i) begin
@@ -741,8 +726,7 @@ module aead_fsm(
                 end
             end
 
-    //============================================================================
-    // TAG_INIT: Pre-final-permutation key XOR.
+            // TAG_INIT: Pre-final-permutation key XOR.
             ST_TAG_INIT: begin
                 if (tag_init_cnt_r < 2'd2) begin
                     write_en_o    = 1'b1;
@@ -753,8 +737,7 @@ module aead_fsm(
                 end
             end
 
-    //============================================================================
-    // ENC_TAG: Output computed tag words: S3 (cnt=0) then S4 (cnt=1).
+            // ENC_TAG: Output computed tag words: S3 (cnt=0) then S4 (cnt=1).
             ST_ENC_TAG: begin
                 m_axis_tvalid_o = 1'b1;
                 m_axis_tkeep_o  = 8'hFF;
@@ -764,19 +747,17 @@ module aead_fsm(
                 m_axis_tdata_o  = core_data_i;
             end
 
-    //============================================================================
-    // DEC_TAG: Accept two incoming tag words for later comparison.
+            // DEC_TAG: Accept two incoming tag words for later comparison.
             ST_DEC_TAG: begin
                 padded_tready_o = 1'b1;
             end
 
-    //============================================================================
-    // VERIFY: Drive word_sel to read S3 (cnt=0) then S4 (cnt=1).
+            // VERIFY: Drive word_sel to read S3 (cnt=0) then S4 (cnt=1).
             ST_VERIFY: begin
                 word_sel_o = (verify_cnt_r == 2'd0) ? 3'd3 : 3'd4;
             end
 
-    //============================================================================
+            //============================================================================
             ST_DONE: begin
                 busy_o     = 1'b0;
                 done_o     = 1'b1;
@@ -786,11 +767,183 @@ module aead_fsm(
             default: ;
         endcase
     end
-    end
 
+    //============================================================================
+    // ACTION LOGIC
+    //============================================================================
 
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            perm_ctx_r         <= CTX_INIT;
+            init_cnt_r         <= 3'd0;
+            perm_started_r     <= 1'b0;
+            post_perm_active_r <= 1'b0;
+            post_perm_cnt_r    <= 2'd0;
+            ad_word_r          <= 1'b0;
+            ad_last_seen_r     <= 1'b0;
+            dat_word_r         <= 1'b0;
+            dat_last_seen_r    <= 1'b0;
+            tag_init_cnt_r     <= 2'd0;
+            tag_cnt_r          <= 1'b0;
+            verify_cnt_r       <= 2'd0;
+            key_r[0]           <= 64'd0;
+            key_r[1]           <= 64'd0;
+            rx_tag_r[0]        <= 64'd0;
+            rx_tag_r[1]        <= 64'd0;
+            tag_ok_r           <= 1'b1;
+        end else begin
+            case (state_r)
+                ST_IDLE: begin
+                    if (start_i) begin
+                        init_cnt_r         <= 3'd0;
+                        perm_ctx_r         <= CTX_INIT;
+                        ad_word_r          <= 1'b0;
+                        ad_last_seen_r     <= 1'b0;
+                        dat_word_r         <= 1'b0;
+                        dat_last_seen_r    <= 1'b0;
+                        tag_init_cnt_r     <= 2'd0;
+                        tag_cnt_r          <= 1'b0;
+                        verify_cnt_r       <= 2'd0;
+                        tag_ok_r           <= 1'b1;
+                        perm_started_r     <= 1'b0;
+                        post_perm_active_r <= 1'b0;
+                        post_perm_cnt_r    <= 2'd0;
+                    end
+                end
 
+             // INIT counter + key capture
+            ST_INIT: begin
+                    case (init_cnt_r)
+                        3'd0: begin
+                            if (ascon_ready_i) init_cnt_r <= 3'd1;
+                        end
+                        3'd1: begin
+                            if (phs && padded_tuser_i == TUSER_KEY) begin
+                                key_r[0]   <= padded_tdata_i; // Capture K
+                                init_cnt_r <= 3'd2;
+                            end
+                        end
+                        3'd2: begin
+                            if (phs && padded_tuser_i == TUSER_KEY) begin
+                                key_r[1]   <= padded_tdata_i; // Capture K
+                                init_cnt_r <= 3'd3;
+                            end
+                        end
+                        3'd3: begin
+                            if (phs && padded_tuser_i == TUSER_NONCE)
+                                init_cnt_r <= 3'd4;
+                        end
+                        3'd4: ; // Hold; next-state transitions on this beat
+                        default: ;
+                    endcase
+                end
 
+                ST_PERM: begin
+                    if (!perm_started_r)
+                        perm_started_r <= 1'b1;
+
+                    if (perm_done) begin
+                        perm_started_r <= 1'b0;
+                        if (needs_post_perm) begin
+                            post_perm_active_r <= 1'b1;
+                            post_perm_cnt_r    <= 2'd0;
+                        end
+                    end
+
+                    if (post_perm_active_r) begin
+                        if (pp_done)
+                            post_perm_active_r <= 1'b0;
+                        else
+                            post_perm_cnt_r <= post_perm_cnt_r + 2'd1;
+                    end
+                end
+
+                ST_AD: begin
+                    if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
+                        ad_last_seen_r <= 1'b1;
+                    end else if (phs && padded_tuser_i == TUSER_AD) begin
+                        if (padded_tlast_i) begin
+                            ad_last_seen_r <= 1'b1;
+                            perm_ctx_r     <= CTX_AD;
+                            ad_word_r      <= 1'b0;
+                        end else if (ad_word_r == 1'b1) begin
+                            // Intermediate block complete → trigger p^b
+                            perm_ctx_r <= CTX_AD;
+                            ad_word_r  <= 1'b0;
+                        end else begin
+                            ad_word_r <= 1'b1; // Word 0 → advance to word 1
+                        end
+                    end
+                end
+
+                // PT block word counter
+                ST_PT_IN: begin
+                    if (phs) begin
+                        if (padded_tlast_i) begin
+                            dat_last_seen_r <= 1'b1;
+                            dat_word_r      <= 1'b0;
+                        end else if (dat_word_r == 1'b1) begin
+                            perm_ctx_r <= CTX_DATA;
+                            dat_word_r <= 1'b0;
+                        end else begin
+                            dat_word_r <= 1'b1;
+                        end
+                    end
+                end
+
+                // CT block word counter
+                ST_CT_IN: begin
+                    if (phs) begin
+                        if (padded_tlast_i) begin
+                            dat_last_seen_r <= 1'b1;
+                            dat_word_r      <= 1'b0;
+                        end else if (dat_word_r == 1'b1) begin
+                            perm_ctx_r <= CTX_DATA;
+                            dat_word_r <= 1'b0;
+                        end else begin
+                            dat_word_r <= 1'b1;
+                        end
+                    end
+                end
+
+                ST_TAG_INIT: begin
+                    if (tag_init_cnt_r < 2'd2)
+                        tag_init_cnt_r <= tag_init_cnt_r + 2'd1;
+
+                    if (tag_init_cnt_r == 2'd1)
+                        perm_ctx_r <= CTX_FINAL;
+
+                    if (tag_init_cnt_r == 2'd2)
+                        tag_init_cnt_r <= 2'd0;
+                end
+
+                // Tag output counter
+                ST_ENC_TAG: begin
+                    if (m_axis_tvalid_o && m_axis_tready_i)
+                        tag_cnt_r <= ~tag_cnt_r;
+                end
+
+                ST_DEC_TAG: begin
+                    if (phs && padded_tuser_i == TUSER_TAG) begin
+                        rx_tag_r[tag_cnt_r] <= padded_tdata_i;
+                        tag_cnt_r           <= ~tag_cnt_r;
+                    end
+                end
+
+                // Tag comparison
+                ST_VERIFY: begin
+                    case (verify_cnt_r)
+                        2'd0: begin
+                            if (core_data_i != rx_tag_r[0]) tag_ok_r <= 1'b0;
+                            verify_cnt_r <= 2'd1;
+                        end
+                        2'd1: begin
+                            if (core_data_i != rx_tag_r[1]) tag_ok_r <= 1'b0;
+                            verify_cnt_r <= 2'd2;
+                        end
+                        default: ; // cnt=2: hold until state → ST_DONE
+                    endcase
+                end
 
 
 endmodule
