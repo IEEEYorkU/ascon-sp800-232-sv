@@ -62,7 +62,8 @@ module hash_fsm (
         STATE_INIT,
         STATE_PERM,
         STATE_ABSORB,
-        STATE_SQUEEZE
+        STATE_SQUEEZE,
+        STATE_DONE
     } state_t;
     state_t state, next_state;
 
@@ -100,6 +101,7 @@ module hash_fsm (
 
         case (state)
             STATE_IDLE: begin
+                next_is_final_perm = 1'b0;
                 if (start_i) next_state = STATE_INIT;
             end
 
@@ -158,7 +160,7 @@ module hash_fsm (
         busy_o             = 1'b1;
         done_o             = 1'b0;
         start_perm_o       = 1'b0;
-        round_config_o     = 1'b0;
+        round_config_o     = 1'b1; // Default to p^12 for Ascon-Hash/XOF
         write_en_o         = 1'b0;
         word_sel_o         = word_cnt;
         core_in_data_sel_o = 2'b00;
@@ -167,7 +169,7 @@ module hash_fsm (
         m_axis_tvalid_o    = 1'b0;
         m_axis_tlast_o     = 1'b0;
         m_axis_tkeep_o     = 8'hFF;
-        m_axis_tuser_o = padded_tuser_i;
+        m_axis_tuser_o     = padded_tuser_i;
         data_o             = 64'b0;
 
         case (state)
@@ -179,8 +181,8 @@ module hash_fsm (
                 write_en_o = 1'b1;
                 if (word_cnt == 3'd0) begin
                     case (mode_i)
-                        ASCON_XOF:  data_o = ASCON_XOF_IV_WORD0;
-                        ASCON_CXOF: data_o = ASCON_CXOF_IV_WORD0;
+                        MODE_XOF:  data_o = ASCON_XOF_IV_WORD0;
+                        MODE_CXOF: data_o = ASCON_CXOF_IV_WORD0;
                         default:    data_o = ASCON_HASH_IV_WORD0;
                     endcase
                 end else begin
@@ -200,6 +202,7 @@ module hash_fsm (
 
             STATE_SQUEEZE: begin
                 m_axis_tvalid_o = 1'b1;
+                m_axis_tuser_o  = TUSER_DIGEST;
                 if (word_cnt == 3'd3 || abort_i) begin
                     m_axis_tlast_o = 1'b1;
                 end

@@ -10,3 +10,6 @@ rtl/ascon_core.sv
 
 # --- Ascon Padder ---
 rtl/ascon_padder.sv
+
+# --- Ascon Protocols ---
+rtl/hash_fsm.sv
