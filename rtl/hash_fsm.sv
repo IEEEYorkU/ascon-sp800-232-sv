@@ -99,7 +99,7 @@ module hash_fsm (
         next_word_cnt      = word_cnt;
         next_is_final_perm = is_final_perm;
 
-        case (state)
+        unique case (state)
             STATE_IDLE: begin
                 next_is_final_perm = 1'b0;
                 if (start_i) next_state = STATE_INIT;
@@ -172,7 +172,7 @@ module hash_fsm (
         m_axis_tuser_o     = padded_tuser_i;
         data_o             = 64'b0;
 
-        case (state)
+        unique case (state)
             STATE_IDLE: begin
                 busy_o = 1'b0;
             end
@@ -180,15 +180,15 @@ module hash_fsm (
             STATE_INIT: begin
                 write_en_o = 1'b1;
                 if (word_cnt == 3'd0) begin
-                    case (mode_i)
+                    unique case (mode_i)
                         MODE_XOF:  data_o = ASCON_XOF_IV_WORD0;
                         MODE_CXOF: data_o = ASCON_CXOF_IV_WORD0;
                         default:    data_o = ASCON_HASH_IV_WORD0;
                     endcase
                 end else begin
-                data_o = 64'b0;
+                    data_o = 64'b0;
+                end
             end
-        end
 
             STATE_PERM: begin
                 // Trigger permutation if core is idle
