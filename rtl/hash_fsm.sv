@@ -1,11 +1,48 @@
-/*
+/* =============================================================================
  * Module Name: hash_fsm
- * Author(s): Ailiya Jafri, Kiet Le
- * Description:
+ * Author(s):   Ailiya Jafri, Kiet Le
+ * Reference:   NIST SP 800-232 (Algorithm 5)
+ * * -----------------------------------------------------------------------------
+ * 1. HIGH-LEVEL DESCRIPTION
+ * -----------------------------------------------------------------------------
  * Control path orchestrator for Ascon-Hash256, Ascon-XOF128, and Ascon-CXOF128.
- * Interfaces with the Ascon Core and the Padder unit to absorb messages and
- * squeeze digests, supporting continuous squeeze mode via the abort_i signal.
- */
+ * This FSM acts as the bridge between the decoupled AXI4-Stream Padder and the
+ * 320-bit Ascon permutation datapath, safely managing the Sponge construction's
+ * Rate and Capacity lanes during data transfer.
+ *
+ * -----------------------------------------------------------------------------
+ * 2. SUPPORTED MODES & PARAMETERS
+ * -----------------------------------------------------------------------------
+ * - MODE_HASH256: Standard hashing. Produces a fixed 256-bit (4-word) digest.
+ * - MODE_XOF:     Extendable output. Digest length is controlled by xof_len_i.
+ * If xof_len_i == 0, the FSM enters infinite continuous squeeze.
+ * - MODE_CXOF:    Customizable XOF. Requires a Customization String (Z) to be
+ * absorbed prior to the main Message (M).
+ *
+ * -----------------------------------------------------------------------------
+ * 3. EXPECTED USAGE FLOW (PROTOCOL)
+ * -----------------------------------------------------------------------------
+ * STEP 1: Initialization
+ * Set `mode_i` and `xof_len_i`, then pulse `start_i`.
+ * The FSM automatically loads the correct 320-bit pre-computed IV
+ * into the Ascon Core, permutes it, and enters the Absorb phase.
+ *
+ * STEP 2: Customization (MODE_CXOF Only)
+ * Stream the customization string (Z) tagged with `TUSER_Z`.
+ * Assert `padded_tlast_i` on the final beat. The FSM will permute
+ * the sponge and automatically return to the Absorb phase.
+ *
+ * STEP 3: Message Absorption
+ * Stream the message (M) tagged with `TUSER_MSG`.
+ * Assert `padded_tlast_i` on the final beat. The FSM will permute
+ * the sponge and transition to the Squeeze phase.
+ *
+ * STEP 4: Squeezing
+ * The FSM drives `m_axis_tvalid_o` high and outputs 64-bit digest
+ * words, triggering intermediate permutations automatically.
+ * It asserts `m_axis_tlast_o` on the final requested word.
+ * (Note: For infinite XOF streams, pulse `abort_i` to terminate).
+ * ============================================================================= */
 
 `timescale 1ns / 1ps
 import ascon_pkg::*;
@@ -160,7 +197,7 @@ module hash_fsm (
             end
 
             STATE_SQUEEZE: begin
-                if (m_axis_tready_i && m_axis_tvalid_o) begin
+                if (m_axis_tready_i) begin
                     next_word_cnt = word_cnt + 32'd1;
                     // Check Termination Conditions (Hash256=4 words, or XOF Abort/Length)
                     if (abort_i || ((mode_i == MODE_HASH256 || xof_len_i > 0) && next_word_cnt == target_squeeze_words)) begin
@@ -239,17 +276,13 @@ module hash_fsm (
                 m_axis_tvalid_o = 1'b1;
                 word_sel_o      = 3'd0; // Squeeze ONLY from S0
 
-                // Assert TLAST on the final beat (if not in continuous mode)
-                if (abort_i || (xof_len_i > 0 && (word_cnt + 32'd1 == target_squeeze_words))) begin
-                    m_axis_tlast_o = 1'b1;
-                end
+                // Assert TLAST on the final beat
+                m_axis_tlast_o = (next_state == STATE_DONE);
             end
 
             STATE_DONE: begin
                 done_o = 1'b1;
             end
-
-            default: ;
         endcase
     end
 
