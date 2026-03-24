@@ -145,9 +145,16 @@ module hash_fsm (
             STATE_ABSORB: begin
                 if (padded_tvalid_i && padded_tready_o) begin
                     next_state = STATE_PERM_START; // Hash permutes after EVERY block
-                    if (padded_tlast_i) begin
+
+                    // PHASE DECISION:
+                    // If TLAST is high, we normally transition to SQUEEZE.
+                    // EXCEPTION (CXOF): If the packet is a Customization String (TUSER_Z),
+                    // we must return to ABSORB to process the actual Message next.
+                    if (padded_tlast_i && padded_tuser_i != TUSER_Z) begin
                         next_phase    = PHASE_SQUEEZE;
                         next_word_cnt = 32'd0;
+                    end else begin
+                        next_phase    = PHASE_ABSORB;
                     end
                 end
             end

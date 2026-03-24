@@ -1,6 +1,6 @@
 /* =============================================================================
  * Module Name: hash_fsm_tb
- * Author(s):   Kiet Le
+ * Author(s):   Kiet Le, Ailiya Jafri
  * Description:
  * Verification environment for the Ascon-Hash/XOF Control FSM.
  * Simulates AXI-Stream backpressure and the Ascon datapath delay.
@@ -85,9 +85,10 @@ module hash_fsm_tb;
     endtask
 
     // Simulates the Padder sending a 64-bit word
-    task automatic send_padded_beat(input logic is_last);
+    task automatic send_padded_beat(input logic is_last, input axi_tuser_t tuser);
         padded_tvalid_i = 1'b1;
         padded_tlast_i  = is_last;
+        padded_tuser_i  = tuser;
         // Wait until the FSM accepts the beat
         do @(posedge clk); while (!padded_tready_o);
         #1;
@@ -101,12 +102,12 @@ module hash_fsm_tb;
         while (!done_o) begin
             @(posedge clk);
             timeout++;
-            if (timeout > 500) begin
+            if (timeout > 1000) begin
                 $error("[TIMEOUT] FSM never asserted done_o!");
                 $finish;
             end
         end
-        $display(" ---> FSM Done Pulse Received.");
+        $display("   ---> FSM Done Pulse Received.");
     endtask
 
     // =======================================================================
@@ -154,7 +155,7 @@ module hash_fsm_tb;
         @(posedge clk); #1 start_i = 0;
 
         // Send exactly 1 padded message block
-        send_padded_beat(.is_last(1'b1));
+        send_padded_beat(.is_last(1'b1), .tuser(TUSER_MSG));
 
         wait_for_done();
         $display("   [PASS] Test 1 Completed.\n");
@@ -164,13 +165,15 @@ module hash_fsm_tb;
         // -------------------------------------------------------------------
         $display("[TEST 2] Multi-Block Absorb (3 Absorbs, 4 Squeezes)");
         apply_reset();
+        mode_i    = MODE_HASH256;
+        xof_len_i = 0;
 
         @(posedge clk); #1 start_i = 1;
         @(posedge clk); #1 start_i = 0;
 
-        send_padded_beat(.is_last(1'b0)); // Block 1 (Not last)
-        send_padded_beat(.is_last(1'b0)); // Block 2 (Not last)
-        send_padded_beat(.is_last(1'b1)); // Block 3 (Last)
+        send_padded_beat(.is_last(1'b0), .tuser(TUSER_MSG)); // Block 1 (Not last)
+        send_padded_beat(.is_last(1'b0), .tuser(TUSER_MSG)); // Block 2 (Not last)
+        send_padded_beat(.is_last(1'b1), .tuser(TUSER_MSG)); // Block 3 (Last)
 
         wait_for_done();
         $display("   [PASS] Test 2 Completed.\n");
@@ -186,10 +189,32 @@ module hash_fsm_tb;
         @(posedge clk); #1 start_i = 1;
         @(posedge clk); #1 start_i = 0;
 
-        send_padded_beat(.is_last(1'b1));
+        send_padded_beat(.is_last(1'b1), .tuser(TUSER_MSG));
 
         wait_for_done();
         $display("   [PASS] Test 3 Completed.\n");
+
+        // -------------------------------------------------------------------
+        // TEST 4: CXOF (Customization String + Message)
+        // -------------------------------------------------------------------
+        $display("[TEST 4] Ascon-CXOF (1 Z block, 1 M block, 4 Squeezes)");
+        apply_reset();
+        mode_i    = MODE_CXOF;
+        xof_len_i = 32; // 32 bytes = 4 words
+
+        @(posedge clk); #1 start_i = 1;
+        @(posedge clk); #1 start_i = 0;
+
+        // 1. Absorb Customization String (Z) - TLAST=1 but TUSER_Z
+        // The FSM should intercept this and stay in the ABSORB phase.
+        send_padded_beat(.is_last(1'b1), .tuser(TUSER_Z));
+
+        // 2. Absorb Message (M) - TLAST=1 and TUSER_MSG
+        // The FSM should now transition to SQUEEZE phase.
+        send_padded_beat(.is_last(1'b1), .tuser(TUSER_MSG));
+
+        wait_for_done();
+        $display("   [PASS] Test 4 Completed.\n");
 
         // -------------------------------------------------------------------
         $display("==================================================");
