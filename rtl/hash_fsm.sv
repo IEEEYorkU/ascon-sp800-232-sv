@@ -156,7 +156,7 @@ module hash_fsm (
                 if (m_axis_tready_i && m_axis_tvalid_o) begin
                     next_word_cnt = word_cnt + 32'd1;
                     // Check Termination Conditions (Hash256=4 words, or XOF Abort/Length)
-                    if (abort_i || (xof_len_i > 0 && next_word_cnt == target_squeeze_words)) begin
+                    if (abort_i || ((mode_i == MODE_HASH256 || xof_len_i > 0) && next_word_cnt == target_squeeze_words)) begin
                         next_state = STATE_DONE;
                     end else begin
                         next_state = STATE_PERM_START; // Permute between EVERY squeeze block
