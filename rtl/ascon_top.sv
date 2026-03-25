@@ -63,7 +63,7 @@ module ascon_top (
     // -----------------------------------------------------------------------
     // Basic Control & Status Interface
     // -----------------------------------------------------------------------
-    input  logic [1:0]                          mode_i,     // Operating mode selection (00: AEAD128, 01: Hash256, 10: XOF128, 11: CXOF128)
+    input  ascon_mode_t                         mode_i,     // Operating mode selection (00: AEAD128, 01: Hash256, 10: XOF128, 11: CXOF128)
     input  logic [31:0]                         xof_len_i,  // 0 = Infinite/Continuous Mode, else specific byte length
     input  logic                                start_i,    // Pulse high to begin
     input  logic                                abort_i,    // Pulse high to terminate continuous squeezing
@@ -176,7 +176,7 @@ module ascon_top (
         // Formatted Output to Internal Logic
         .padded_tdata_o     (padded_tdata),
         .padded_tkeep_o     (padded_tkeep),
-        .padded_tuser_o     (padded_tuser),
+        .padded_tuser_o     (axi_tuser_t'(padded_tuser)),
         .padded_tlast_o     (padded_tlast),
         .padded_tvalid_o    (padded_tvalid),
         .padded_tready_i    (padded_tready)  // Driven by the active FSM via the Arbiter

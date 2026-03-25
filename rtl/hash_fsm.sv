@@ -70,8 +70,8 @@ module hash_fsm (
     output logic [2:0]     word_sel_o,
     output ascon_word_t    data_o,         // Used to write the pre-computed Hash IVs
     output logic           write_en_o,
-    output logic [1:0]     core_in_data_sel_o,
-    output logic [1:0]     xor_sel_o,
+    output data_sel_t      core_in_data_sel_o,
+    output xor_sel_t       xor_sel_o,
 
     // -----------------------------------------------------------------------
     // Padded AXI4-Stream Slave (Data coming FROM the Padder)
