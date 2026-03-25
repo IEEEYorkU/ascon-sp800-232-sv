@@ -51,7 +51,7 @@
 
 `timescale 1ns / 1ps
 
-import ascon_pkg::*; // Imports TUSER enum definitions
+import ascon_pkg::*;
 
 module ascon_top (
     // -----------------------------------------------------------------------
@@ -211,7 +211,7 @@ module ascon_top (
 
             // AXI Stream Handshake Muxing
             padded_tready       = hash_s_axis_tready;
-            m_axis_tdata        = core_data_o;
+            m_axis_tdata        = hash_m_axis_tvalid ? core_data_o : 64'b0; // Security: Don't broadcast garbage data when not valid
             m_axis_tvalid       = hash_m_axis_tvalid;
             m_axis_tlast        = hash_m_axis_tlast;
             m_axis_tuser        = hash_m_axis_tuser;
@@ -285,6 +285,7 @@ module ascon_top (
         aead_done          = 1'b0;
         aead_tag_fail      = 1'b0;
     end
+    // --------------------------------------------------------------------------
 
     hash_fsm u_hash_fsm (
         .clk                    (clk),
