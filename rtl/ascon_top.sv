@@ -103,22 +103,21 @@ module ascon_top (
     logic           core_write_en_i;
     ascon_word_t    core_data_o;
     logic           core_ready_o;
-    logic [1:0]     core_in_data_sel;
+    data_sel_t      core_in_data_sel;
 
     // --- Arbiter Muxing FSM Logic ---
     // We define internal wires coming OUT of the sub-FSMs
-    ascon_word_t    aead_data_i, hash_data_i;
     logic           aead_write_en, hash_write_en;
     logic [2:0]     aead_word_sel, hash_word_sel;
     logic           aead_start_perm, hash_start_perm;
     logic           aead_round_config, hash_round_config;
     ascon_word_t    aead_data_o, hash_data_o;
-    logic [1:0]     aead_xor_sel, hash_xor_sel;
-    data_sel_t     aead_in_data_sel, hash_in_data_sel;
+    xor_sel_t       aead_xor_sel, hash_xor_sel;
+    data_sel_t      aead_in_data_sel, hash_in_data_sel;
 
     // --- XOR Module Signals ---
     ascon_word_t    xor_op1, xor_op2, xor_res;
-    logic [1:0]     xor_in_op2_sel;
+    xor_sel_t       xor_in_op2_sel;
 
     // --- Padder Interconnect Wires ---
     // These carry the formatted stream from the padder to the internal logic
@@ -259,6 +258,33 @@ module ascon_top (
     //     .m_axis_tvalid_o (aead_m_axis_tvalid), // Intermediate wire for muxing
     //     .m_axis_tready_i (m_axis_tready)       // Direct from top-level
     // );
+
+    // --- AEAD FSM STUB (FSM commented out, safe defaults), CAN DELETE LATER ---
+    always_comb begin
+        // Control outputs to core
+        aead_start_perm    = 1'b0;
+        aead_round_config  = 1'b0;
+        aead_word_sel      = 3'b000;
+        aead_write_en      = 1'b0;
+        aead_in_data_sel   = DATA_IN_AEAD_SEL; // or whichever enum zero-value is
+        aead_xor_sel       = XOR_IN_AEAD_SEL;
+
+        // Data output to core/XOR
+        aead_data_o        = 64'b0;
+
+        // AXI handshake outputs
+        aead_s_axis_tready = 1'b0;  // Don't consume any input
+        aead_m_axis_tdata  = 64'b0;
+        aead_m_axis_tkeep  = 8'b0;
+        aead_m_axis_tuser  = 3'b0;
+        aead_m_axis_tlast  = 1'b0;
+        aead_m_axis_tvalid = 1'b0;  // Don't assert valid output
+
+        // Status
+        aead_busy          = 1'b0;
+        aead_done          = 1'b0;
+        aead_tag_fail      = 1'b0;
+    end
 
     hash_fsm u_hash_fsm (
         .clk                    (clk),
