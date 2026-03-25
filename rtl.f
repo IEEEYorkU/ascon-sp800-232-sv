@@ -11,5 +11,12 @@ rtl/ascon_core.sv
 # --- Ascon Padder ---
 rtl/ascon_padder.sv
 
-# --- Ascon Protocols ---
+# --- Ascon FSMs ---
 rtl/hash_fsm.sv
+# In progress: rtl/aead_fsm.sv
+
+# --- Helper Modules ---
+rtl/xor64.sv
+
+# --- Ascon Top-Level ---
+rtl/ascon_top.sv

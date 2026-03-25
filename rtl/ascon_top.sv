@@ -53,11 +53,7 @@
 
 import ascon_pkg::*; // Imports TUSER enum definitions
 
-module ascon_top #(
-    // AXI4-Stream Parameters
-    parameter int C_AXIS_TDATA_WIDTH = 64,
-    parameter int C_AXIS_TUSER_WIDTH = 3
-)(
+module ascon_top (
     // -----------------------------------------------------------------------
     // Global Clock and Reset
     // -----------------------------------------------------------------------
@@ -65,37 +61,35 @@ module ascon_top #(
     input  logic                                rst,
 
     // -----------------------------------------------------------------------
-    // Basic Control & Status Interface (Phase 1)
+    // Basic Control & Status Interface
     // -----------------------------------------------------------------------
-    // 00: AEAD128, 01: Hash256, 10: XOF128, 11: CXOF128
-    input  logic [1:0]                          mode_i,
-    input  logic                                start_i,     // Pulse high to begin
-    output logic                                busy_o,      // High when FSM is active
-    output logic                                done_o,      // Pulse high when complete
-    output logic                                tag_fail_o,  // High if AEAD decryption MAC check fails
-
-    // Note: If you plan to implement XOF128 in Phase 1, you will also need
-    // an input here for the requested length L (e.g., input logic [31:0] xof_len_i).
+    input  logic [1:0]                          mode_i,     // Operating mode selection (00: AEAD128, 01: Hash256, 10: XOF128, 11: CXOF128)
+    input  logic [31:0]                         xof_len_i,  // 0 = Infinite/Continuous Mode, else specific byte length
+    input  logic                                start_i,    // Pulse high to begin
+    input  logic                                abort_i,    // Pulse high to terminate continuous squeezing
+    output logic                                busy_o,     // High when FSM is active
+    output logic                                done_o,     // Pulse high when complete
+    output logic                                tag_fail_o, // High if AEAD decryption MAC check fails
 
     // -----------------------------------------------------------------------
     // AXI4-Stream Slave Interface (Data IN: Key, Nonce, AD, PT, CT)
     // -----------------------------------------------------------------------
-    input  logic [C_AXIS_TDATA_WIDTH-1:0]       s_axis_tdata,
-    input  logic [(C_AXIS_TDATA_WIDTH/8)-1:0]   s_axis_tkeep,  // Byte enables for padding
-    input  logic [C_AXIS_TUSER_WIDTH-1:0]       s_axis_tuser,  // Packet type indicator
+    input  logic [WORD_WIDTH-1:0]               s_axis_tdata,  // Data input
+    input  logic [(WORD_WIDTH/8)-1:0]           s_axis_tkeep,  // Byte enables for padding
+    input  logic [TUSER_WIDTH-1:0]              s_axis_tuser,  // Packet type indicator
     input  logic                                s_axis_tlast,  // Boundary marker
-    input  logic                                s_axis_tvalid,
+    input  logic                                s_axis_tvalid, // Valid signal
     output logic                                s_axis_tready, // Tells master FSM is ready
 
     // -----------------------------------------------------------------------
     // AXI4-Stream Master Interface (Data OUT: CT, PT, Tag, Hash Digest)
     // -----------------------------------------------------------------------
-    output logic [C_AXIS_TDATA_WIDTH-1:0]       m_axis_tdata,
-    output logic [(C_AXIS_TDATA_WIDTH/8)-1:0]   m_axis_tkeep,
-    output logic [C_AXIS_TUSER_WIDTH-1:0]       m_axis_tuser,  // Tells downstream if CT or Tag
+    output logic [WORD_WIDTH-1:0]               m_axis_tdata,  // Data output
+    output logic [(WORD_WIDTH/8)-1:0]           m_axis_tkeep,  // Byte enables for padding
+    output logic [TUSER_WIDTH-1:0]              m_axis_tuser,  // Tells downstream if CT or Tag
     output logic                                m_axis_tlast,  // End of output stream
-    output logic                                m_axis_tvalid,
-    input  logic                                m_axis_tready
+    output logic                                m_axis_tvalid, // Valid signal
+    input  logic                                m_axis_tready  // Tells master FSM is ready
 );
     // =========================================================================
     // Logic Instantiations
@@ -118,9 +112,11 @@ module ascon_top #(
     logic           aead_write_en, hash_write_en;
     logic [2:0]     aead_word_sel, hash_word_sel;
     logic           aead_start_perm, hash_start_perm;
+    logic           aead_round_config, hash_round_config;
     logic           aead_xor_en, hash_xor_en;
     ascon_word_t    aead_data_o, hash_data_o;
-     logic [1:0]    aead_xor_sel, hash_xor_sel;
+    logic [1:0]     aead_xor_sel, hash_xor_sel;
+    data_sel_t     aead_in_data_sel, hash_in_data_sel;
 
     // --- XOR Module Signals ---
     ascon_word_t    xor_op1, xor_op2, xor_res;
@@ -193,7 +189,7 @@ module ascon_top #(
             // Core Control Muxing
             core_start_perm_i   = aead_start_perm;
             core_round_config_i = aead_round_config;
-            core_word_sel_i     = aead_word_sel_i;
+            core_word_sel_i     = aead_word_sel;
             core_write_en_i     = aead_write_en;
             core_xor_en_i       = aead_xor_en;
             core_in_data_sel    = aead_in_data_sel;
@@ -212,7 +208,7 @@ module ascon_top #(
             // Core Control Muxing
             core_start_perm_i   = hash_start_perm;
             core_round_config_i = hash_round_config;
-            core_word_sel_i     = hash_word_sel_i;
+            core_word_sel_i     = hash_word_sel;
             core_write_en_i     = hash_write_en;
             core_xor_en_i       = hash_xor_en;
             core_in_data_sel    = hash_in_data_sel;
@@ -289,7 +285,7 @@ module ascon_top #(
         .data_o                 (hash_data_o),       // Used to write the pre-computed Hash IVs into the core
         .write_en_o             (hash_write_en),
         .core_in_data_sel_o     (hash_in_data_sel),
-        .xor_sel_o              (hash_xor_sel)
+        .xor_sel_o              (hash_xor_sel),
 
         // --- Padded AXI4-Stream Slave (Data coming FROM the Padder) ---
         .padded_tuser_i         (padded_tuser),     // Tells FSM if it's Message (M) or Custom String (Z)

@@ -12,6 +12,7 @@ package ascon_pkg;
     localparam int WORD_WIDTH   = 64;   // Ascon uses 64-bit words
     localparam int NUM_WORDS    = 5;    // State consists of S0..S4
     localparam int STATE_WIDTH  = 320;  // Total state size
+    localparam int TUSER_WIDTH  = 4;    // Width of AXI4-Stream TUSER
 
     // -------------------------------------------------------------------------
     // 2. Type Definitions
@@ -28,7 +29,7 @@ package ascon_pkg;
     typedef logic [3:0] rnd_t;
 
     // 4-bit TUSER encoding for AXI4-Stream
-    typedef enum logic [3:0] {
+    typedef enum logic [TUSER_WIDTH-1:0] {
         TUSER_RESERVED = 4'b0000,
 
         // AEAD Inputs
