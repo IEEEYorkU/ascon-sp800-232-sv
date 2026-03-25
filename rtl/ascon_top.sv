@@ -168,7 +168,7 @@ module ascon_top (
         // Raw Input from Outside World (Directly connected to top-level ports)
         .s_axis_tdata_i     (s_axis_tdata),
         .s_axis_tkeep_i     (s_axis_tkeep),
-        .s_axis_tuser_i     (s_axis_tuser),
+        .s_axis_tuser_i     (axi_tuser_t'(s_axis_tuser)),
         .s_axis_tlast_i     (s_axis_tlast),
         .s_axis_tvalid_i    (s_axis_tvalid),
         .s_axis_tready_o    (s_axis_tready), // Padder controls the real AXI flow
@@ -176,7 +176,7 @@ module ascon_top (
         // Formatted Output to Internal Logic
         .padded_tdata_o     (padded_tdata),
         .padded_tkeep_o     (padded_tkeep),
-        .padded_tuser_o     (axi_tuser_t'(padded_tuser)),
+        .padded_tuser_o     (padded_tuser),
         .padded_tlast_o     (padded_tlast),
         .padded_tvalid_o    (padded_tvalid),
         .padded_tready_i    (padded_tready)  // Driven by the active FSM via the Arbiter
