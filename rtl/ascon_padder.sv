@@ -43,6 +43,12 @@
  * bytes to overwrite the state, AND it needs the raw `TKEEP` signal to know
  * exactly where (\ell) to manually inject the padding bits via XOR.
  *
+ * 4. ENDIANNESS:
+ * The AXI bus is Little-Endian (Byte 0 is tdata[7:0]). Ascon is Big-Endian
+ * (Byte 0 is tdata[63:56]). This module actively performs a Transparent
+ * Byte-Swap on all incoming data so the downstream core receives strict
+ * Big-Endian formatted words.
+ *
  * Ref: NIST SP 800-232 (Algorithm 4 Decryption, Algorithm 5 Hashing)
  * ============================================================================= */
 
@@ -60,7 +66,7 @@ module ascon_padder (
     input  ascon_mode_t   mode_i,
 
     // -----------------------------------------------------------------------
-    // Raw AXI4-Stream Slave (Data FROM Outside World)
+    // Raw AXI4-Stream Slave (Data FROM Outside World - LITTLE ENDIAN)
     // -----------------------------------------------------------------------
     input  ascon_word_t   s_axis_tdata_i,  // Raw data input
     input  logic [7:0]    s_axis_tkeep_i,  // Byte enable mask, indicates valid bytes in the last word
@@ -70,7 +76,7 @@ module ascon_padder (
     output logic          s_axis_tready_o, // Tells the source to stop if the padder is not ready to accept data
 
     // -----------------------------------------------------------------------
-    // Padded AXI4-Stream Master (Data TO Top-Level Mux -> FSMs/Core)
+    // Padded AXI4-Stream Master (Data TO Internal Logic - BIG ENDIAN)
     // -----------------------------------------------------------------------
     output ascon_word_t   padded_tdata_o,  // Post processes 64 bit word with Acson padding rules applied
     output logic [7:0]    padded_tkeep_o,  // Forced to 8'hFF, EXCEPT for TUSER_CT
@@ -112,38 +118,44 @@ module ascon_padder (
     logic is_aead_mode; //AEAD mode helper
     assign is_aead_mode = ((mode_i == MODE_AEAD_ENC) || (mode_i == MODE_AEAD_DEC));
 
-    // Icarus does not support variable part-selects ([i*8 +: 8]) or break
-    // inside always_comb. The padding logic is therefore implemented as a
-    // function and wired via assign, which Icarus handles without restriction.
-    // The case enumerates every contiguous tkeep pattern Ascon can produce:
-    //   tkeep = 8'h00..8'h7F → inject 0x80 at the first invalid byte position
-    //   tkeep = 8'hFF        → full word, no padding here (carry word handles it)
+    // -----------------------------------------------------------------------
+    // 1. Endianness & Padding Generators
+    // -----------------------------------------------------------------------
+
+    // Helper to completely reverse the byte order of a 64-bit word
+    function automatic ascon_word_t swap_bytes(input ascon_word_t data);
+        return {data[7:0],   data[15:8],  data[23:16], data[31:24],
+                data[39:32], data[47:40], data[55:48], data[63:56]};
+    endfunction
+
+    // Converts Little-Endian AXI data directly into padded Big-Endian Ascon data
     function automatic ascon_word_t apply_padding(
         input ascon_word_t data,
         input logic [7:0]  keep
     );
         case (keep)
-            8'h00:   apply_padding = {56'h00_00_00_00_00_00_00, 8'h80};                   // 0 valid bytes
-            8'h01:   apply_padding = {48'h00_00_00_00_00_00,    8'h80, data[7:0]};        // 1 valid byte
-            8'h03:   apply_padding = {40'h00_00_00_00_00,       8'h80, data[15:0]};       // 2 valid bytes
-            8'h07:   apply_padding = {32'h00_00_00_00,          8'h80, data[23:0]};       // 3 valid bytes
-            8'h0F:   apply_padding = {24'h00_00_00,             8'h80, data[31:0]};       // 4 valid bytes
-            8'h1F:   apply_padding = {16'h00_00,                8'h80, data[39:0]};       // 5 valid bytes
-            8'h3F:   apply_padding = { 8'h00,                   8'h80, data[47:0]};       // 6 valid bytes
-            8'h7F:   apply_padding = {                          8'h80, data[55:0]};       // 7 valid bytes
-            default: apply_padding = data; //8'hFF full word, no padding here (carry word handles it)
+            8'h00:   apply_padding = {8'h80, 56'h00_00_00_00_00_00_00};
+            8'h01:   apply_padding = {data[7:0], 8'h80, 48'h00_00_00_00_00_00};
+            8'h03:   apply_padding = {data[7:0], data[15:8], 8'h80, 40'h00_00_00_00_00};
+            8'h07:   apply_padding = {data[7:0], data[15:8], data[23:16], 8'h80, 32'h00_00_00_00};
+            8'h0F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], 8'h80, 24'h00_00_00};
+            8'h1F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], data[39:32], 8'h80, 16'h00_00};
+            8'h3F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], data[39:32], data[47:40], 8'h80, 8'h00};
+            8'h7F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], data[39:32], data[47:40], data[55:48], 8'h80};
+            default: apply_padding = swap_bytes(data);
         endcase
     endfunction
 
     // Power-Optimized Operand Isolation
     always_comb begin
-        // Default: Pass data through
-        masked_data = s_axis_tdata_i;
+        // Default: Actively byte-swap all passing data to Big-Endian
+        masked_data = swap_bytes(s_axis_tdata_i);
 
         // OPERAND ISOLATION:
         // Only wake up and toggle the 64-bit padding multiplexers if we are
         // actively receiving a valid, partial final-word of a padding group.
         // This saves massive dynamic power during long CT/PT/MSG streams.
+        // If it is the final partial word, apply the custom padding constructor
         if (s_axis_tvalid_i && is_padding_group && s_axis_tlast_i && (s_axis_tkeep_i != 8'hFF)) begin
             masked_data = apply_padding(s_axis_tdata_i, s_axis_tkeep_i);
         end
@@ -177,10 +189,10 @@ module ascon_padder (
 
         s_axis_tready_o = padded_tready_i;
         padded_tvalid_o = s_axis_tvalid_i;
-        padded_tdata_o = s_axis_tdata_i;
+        padded_tdata_o = masked_data; // <--- Output the actively swapped data
         padded_tkeep_o = s_axis_tkeep_i;
         padded_tuser_o = s_axis_tuser_i;
-        padded_tlast_o = s_axis_tlast_i;
+        padded_tlast_o = 1'b0;
 
         case (state)
             STATE_IDLE_PASS: begin
@@ -212,7 +224,7 @@ module ascon_padder (
                                     end
                                 end else begin
                                     // HASH/XOF/CXOF full-final: emit current block, then one carry block 0x80...
-                                    padded_tlast_o      = 1'b1;
+                                    padded_tlast_o      = 1'b0;
                                     pad_word2_data_next = 64'h8000_0000_0000_0000;
                                     next_state          = STATE_PAD_WORD2;
                                 end

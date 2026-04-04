@@ -39,25 +39,39 @@ module ascon_padder_tb;
     int scenario;
     logic mismatch;
 
-    // Reference model: mirrors DUT masked_data logic
-    // Uses a found-flag instead of break (Icarus does not support break)
+    // =========================================================================
+    // Software Reference Models
+    // =========================================================================
+
+    // Simulates the physical wire-crossing Byte Swap
+    function automatic ascon_word_t swap_bytes(input ascon_word_t data);
+        return {data[7:0],   data[15:8],  data[23:16], data[31:24],
+                data[39:32], data[47:40], data[55:48], data[63:56]};
+    endfunction
+
+    // Simulates the Big-Endian 0x80 padding injection
     function automatic ascon_word_t ref_padded(input ascon_word_t data, input logic [7:0] keep);
-        ascon_word_t result;
-        logic found;
-        result = data;
-        found  = 1'b0;
+        ascon_word_t result = 64'b0;
+        int byte_idx = 7; // Start placing at the MSB
+        logic found = 1'b0;
+
         for (int i = 0; i < 8; i++) begin
-            if (!found && keep[i] == 1'b0) begin
-                result[i*8 +: 8] = 8'h80;
-                found = 1'b1;
-            end else if (found) begin
-                result[i*8 +: 8] = 8'h00;
+            if (!found) begin
+                if (keep[i] == 1'b1) begin
+                    result[byte_idx*8 +: 8] = data[i*8 +: 8];
+                    byte_idx--;
+                end else begin
+                    result[byte_idx*8 +: 8] = 8'h80;
+                    found = 1'b1;
+                end
             end
         end
         return result;
     endfunction
 
-    // Helpers
+    // =========================================================================
+    // Helpers & Tasks
+    // =========================================================================
     function automatic ascon_word_t rand_word();
         return {$urandom(), $urandom()};
     endfunction
@@ -68,7 +82,6 @@ module ascon_padder_tb;
         return (8'h01 << n) - 1;  // e.g. n=3 → 8'h07
     endfunction
 
-    // AXI-S helpers
     task automatic apply_reset();
         rst = 1; s_axis_tvalid_i = 0; s_axis_tlast_i = 0;
         s_axis_tkeep_i = 8'hFF; s_axis_tdata_i = '0;
@@ -89,7 +102,6 @@ module ascon_padder_tb;
         data = padded_tdata_o; keep = padded_tkeep_o; tlast = padded_tlast_o; #1;
     endtask
 
-    // Fail printer
     task automatic fail_mismatch(
         input int          tid,
         input string       label,
@@ -104,7 +116,7 @@ module ascon_padder_tb;
         $finish;
     endtask
 
-    // Test variables (all declared at module scope — no automatic locals in initial)
+    // Test variables
     ascon_word_t rand_d, beat_d, out_data, exp_data;
     logic [7:0]  rand_k, out_keep;
     logic        out_last;
@@ -123,7 +135,7 @@ module ascon_padder_tb;
         $display("Starting Ascon Padder Testbench");
 
         // =====================================================================
-        // Test 1: GROUP A pass-through (KEY) — data/keep/tlast must be unmodified
+        // Test 1: GROUP A pass-through (KEY) — Expected swapped data
         // =====================================================================
         apply_reset(); mode_i = MODE_AEAD_ENC;
         rand_d = rand_word();
@@ -134,11 +146,12 @@ module ascon_padder_tb;
             end
             begin
                 collect_beat(out_data, out_keep, out_last);
-                mismatch = (out_data !== rand_d) || out_last;
-                if (mismatch) fail_mismatch(test_id, "KEY beat0", out_data, rand_d, out_keep, out_last);
+                mismatch = (out_data !== swap_bytes(rand_d)) || out_last; // Swapped check
+                if (mismatch) fail_mismatch(test_id, "KEY beat0", out_data, swap_bytes(rand_d), out_keep, out_last);
+
                 collect_beat(out_data, out_keep, out_last);
-                mismatch = (out_data !== rand_d) || !out_last;
-                if (mismatch) fail_mismatch(test_id, "KEY beat1", out_data, rand_d, out_keep, out_last);
+                mismatch = (out_data !== swap_bytes(rand_d)) || !out_last; // Swapped check
+                if (mismatch) fail_mismatch(test_id, "KEY beat1", out_data, swap_bytes(rand_d), out_keep, out_last);
             end
         join
         $display("Test 1: KEY Pass-Through PASSED.");
@@ -150,7 +163,7 @@ module ascon_padder_tb;
         apply_reset(); mode_i = MODE_HASH256;
         rand_d   = rand_word();
         rand_k   = rand_partial_keep();
-        exp_data = ref_padded(rand_d, rand_k);
+        exp_data = ref_padded(rand_d, rand_k); // Now Big-Endian
         fork
             send_beat(rand_d, rand_k, TUSER_MSG, 1);
             begin
@@ -171,8 +184,8 @@ module ascon_padder_tb;
             send_beat(rand_d, 8'hFF, TUSER_MSG, 1);
             begin
                 collect_beat(out_data, out_keep, out_last);
-                mismatch = (out_data !== rand_d) || !out_last;
-                if (mismatch) fail_mismatch(test_id, "HASH full word0", out_data, rand_d, out_keep, out_last);
+                mismatch = (out_data !== swap_bytes(rand_d)) || !out_last; // Swapped check
+                if (mismatch) fail_mismatch(test_id, "HASH full word0", out_data, swap_bytes(rand_d), out_keep, out_last);
                 collect_beat(out_data, out_keep, out_last);
                 mismatch = (out_data !== 64'h8000_0000_0000_0000) || !out_last;
                 if (mismatch) fail_mismatch(test_id, "HASH carry", out_data, 64'h8000_0000_0000_0000, out_keep, out_last);
@@ -203,7 +216,7 @@ module ascon_padder_tb;
         test_id++;
 
         // =====================================================================
-        // Test 5: CT strict pass-through — tkeep must NOT be forced to 0xFF
+        // Test 5: CT strict pass-through — tkeep untouched
         // =====================================================================
         apply_reset(); mode_i = MODE_AEAD_DEC;
         rand_d = rand_word();
@@ -212,8 +225,8 @@ module ascon_padder_tb;
             send_beat(rand_d, rand_k, TUSER_CT, 1);
             begin
                 collect_beat(out_data, out_keep, out_last);
-                mismatch = (out_data !== rand_d) || (out_keep !== rand_k) || !out_last;
-                if (mismatch) fail_mismatch(test_id, "CT pass-through", out_data, rand_d, out_keep, out_last);
+                mismatch = (out_data !== swap_bytes(rand_d)) || (out_keep !== rand_k) || !out_last; // Swapped check
+                if (mismatch) fail_mismatch(test_id, "CT pass-through", out_data, swap_bytes(rand_d), out_keep, out_last);
             end
         join
         $display("Test 5: CT Strict Pass-Through PASSED.");
@@ -239,7 +252,7 @@ module ascon_padder_tb;
                         send_beat(rand_d, rand_k, TUSER_MSG, 1);
                     end
                     begin
-                        for (int b = 0; b < num_beats; b++) collect_beat(out_data, out_keep, out_last);
+                        for (int b = 0; b < num_beats; b++) collect_beat(out_data, out_keep, out_last); // Ignores full words
                         collect_beat(out_data, out_keep, out_last);
                         mismatch = (out_data !== exp_data) || (out_keep !== 8'hFF) || !out_last;
                         if (mismatch) fail_mismatch(test_id, "RAND HASH partial", out_data, exp_data, out_keep, out_last);
@@ -257,20 +270,20 @@ module ascon_padder_tb;
                     begin
                         for (int b = 0; b < num_beats; b++) collect_beat(out_data, out_keep, out_last);
                         collect_beat(out_data, out_keep, out_last);
-                        mismatch = (out_data !== rand_d) || !out_last;
-                        if (mismatch) fail_mismatch(test_id, "RAND HASH full word0", out_data, rand_d, out_keep, out_last);
+                        mismatch = (out_data !== swap_bytes(rand_d)) || !out_last; // Swapped check
+                        if (mismatch) fail_mismatch(test_id, "RAND HASH full word0", out_data, swap_bytes(rand_d), out_keep, out_last);
                         collect_beat(out_data, out_keep, out_last);
                         mismatch = (out_data !== 64'h8000_0000_0000_0000) || !out_last;
                         if (mismatch) fail_mismatch(test_id, "RAND HASH carry", out_data, 64'h8000_0000_0000_0000, out_keep, out_last);
                     end
                 join
 
-            // (c) AEAD partial on word0 (even leading beats to keep word_count=0)
+            // (c) AEAD partial on word0
             end else if (scenario == 2) begin
                 apply_reset(); mode_i = MODE_AEAD_ENC;
                 rand_k    = rand_partial_keep();
                 exp_data  = ref_padded(rand_d, rand_k);
-                num_beats = $urandom_range(0, 2) * 2; // 0, 2, or 4
+                num_beats = $urandom_range(0, 2) * 2; // Keep alignment even
                 fork
                     begin
                         for (int b = 0; b < num_beats; b++) send_beat(rand_word(), 8'hFF, TUSER_PT, 0);
@@ -295,8 +308,8 @@ module ascon_padder_tb;
                     send_beat(rand_d, rand_k, TUSER_CT, 1);
                     begin
                         collect_beat(out_data, out_keep, out_last);
-                        mismatch = (out_data !== rand_d) || (out_keep !== rand_k) || !out_last;
-                        if (mismatch) fail_mismatch(test_id, "RAND CT pass", out_data, rand_d, out_keep, out_last);
+                        mismatch = (out_data !== swap_bytes(rand_d)) || (out_keep !== rand_k) || !out_last; // Swapped check
+                        if (mismatch) fail_mismatch(test_id, "RAND CT pass", out_data, swap_bytes(rand_d), out_keep, out_last);
                     end
                 join
             end

@@ -223,7 +223,7 @@ module hash_fsm (
         busy_o             = 1'b1;
         done_o             = 1'b0;
         start_perm_o       = 1'b0;
-        round_config_o     = 1'b0; // 0 = p^12 for Ascon-Hash/XOF
+        round_config_o     = 1'b1; // 1 = p^12 for Ascon-Hash/XOF
         write_en_o         = 1'b0;
         word_sel_o         = word_cnt[2:0];
         core_in_data_sel_o = DATA_IN_HASH_SEL; // Default to FSM data
