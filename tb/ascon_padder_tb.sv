@@ -184,7 +184,7 @@ module ascon_padder_tb;
             send_beat(rand_d, 8'hFF, TUSER_MSG, 1);
             begin
                 collect_beat(out_data, out_keep, out_last);
-                mismatch = (out_data !== swap_bytes(rand_d)) || !out_last; // Swapped check
+                mismatch = (out_data !== swap_bytes(rand_d)) || out_last; // Swapped check
                 if (mismatch) fail_mismatch(test_id, "HASH full word0", out_data, swap_bytes(rand_d), out_keep, out_last);
                 collect_beat(out_data, out_keep, out_last);
                 mismatch = (out_data !== 64'h8000_0000_0000_0000) || !out_last;
@@ -270,7 +270,7 @@ module ascon_padder_tb;
                     begin
                         for (int b = 0; b < num_beats; b++) collect_beat(out_data, out_keep, out_last);
                         collect_beat(out_data, out_keep, out_last);
-                        mismatch = (out_data !== swap_bytes(rand_d)) || !out_last; // Swapped check
+                        mismatch = (out_data !== swap_bytes(rand_d)) || out_last; // Swapped check
                         if (mismatch) fail_mismatch(test_id, "RAND HASH full word0", out_data, swap_bytes(rand_d), out_keep, out_last);
                         collect_beat(out_data, out_keep, out_last);
                         mismatch = (out_data !== 64'h8000_0000_0000_0000) || !out_last;

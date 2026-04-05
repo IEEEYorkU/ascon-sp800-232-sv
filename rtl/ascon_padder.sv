@@ -189,61 +189,58 @@ module ascon_padder (
 
         s_axis_tready_o = padded_tready_i;
         padded_tvalid_o = s_axis_tvalid_i;
-        padded_tdata_o = masked_data; // <--- Output the actively swapped data
-        padded_tkeep_o = s_axis_tkeep_i;
-        padded_tuser_o = s_axis_tuser_i;
-        padded_tlast_o = 1'b0;
+        padded_tdata_o  = masked_data;
+        padded_tkeep_o  = s_axis_tkeep_i;
+        padded_tuser_o  = s_axis_tuser_i;
+        padded_tlast_o  = s_axis_tlast_i;
 
         case (state)
             STATE_IDLE_PASS: begin
                 if (is_padding_group) begin
-                    // Padding groups are always delivered as full words downstream.
+                    // Padding groups always output full words
                     padded_tkeep_o = 8'hFF;
-                end
 
-                if (s_axis_tvalid_i && padded_tready_i) begin
-                    if (is_padding_group) begin
+                    // COMBINATIONAL OVERRIDE: Calculate correct TLAST for padding groups
+                    if (s_axis_tvalid_i && s_axis_tlast_i) begin
+                        if (s_axis_tkeep_i == 8'hFF) begin
+                            // Full word needs a carry block, so THIS word is NOT the last word.
+                            // Exception: AEAD word1 ends perfectly here and carries to next block.
+                            if (is_aead_mode && word_count_reg != 1'b0) padded_tlast_o = 1'b1;
+                            else padded_tlast_o = 1'b0;
+                        end else begin
+                            // Partial word fits perfectly.
+                            // Exception: AEAD word0 partial must be followed by a 0-padded word1.
+                            if (is_aead_mode && word_count_reg == 1'b0) padded_tlast_o = 1'b0;
+                            else padded_tlast_o = 1'b1;
+                        end
+                    end
+
+                    // SEQUENTIAL NEXT-STATE LOGIC
+                    if (s_axis_tvalid_i && padded_tready_i) begin
                         if (s_axis_tlast_i) begin
-                            //Final part of a padding-group packet
                             held_tuser_next = s_axis_tuser_i;
                             word_count_next = 1'b0;
 
                             if (s_axis_tkeep_i == 8'hFF) begin
-                                // Full final word: 0x80 must carry into generated word(s).
                                 if (is_aead_mode) begin
                                     if (word_count_reg == 1'b0) begin
-                                        // AEAD word0 full-final: generate word1 = 0x80..., then end block.
-                                        padded_tlast_o      = 1'b0;
                                         pad_word2_data_next = 64'h8000_0000_0000_0000;
                                         next_state          = STATE_PAD_WORD2;
                                     end else begin
-                                        // AEAD word1 full-final: current block ends, then emit [0x80...][0x00...].
-                                        padded_tlast_o      = 1'b1;
                                         pad_word2_data_next = 64'h0000_0000_0000_0000;
                                         next_state          = STATE_PAD_WORD1;
                                     end
                                 end else begin
-                                    // HASH/XOF/CXOF full-final: emit current block, then one carry block 0x80...
-                                    padded_tlast_o      = 1'b0;
                                     pad_word2_data_next = 64'h8000_0000_0000_0000;
                                     next_state          = STATE_PAD_WORD2;
                                 end
                             end else begin
-                                //padding fits into current final word.
-                                padded_tdata_o = masked_data;
-
                                 if (is_aead_mode && (word_count_reg == 1'b0)) begin
-                                    // AEAD ended on word0: generate zero word1 to align 128-bit rate.
-                                    padded_tlast_o      = 1'b0;
                                     pad_word2_data_next = 64'h0000_0000_0000_0000;
                                     next_state          = STATE_PAD_WORD2;
-                                end else begin
-                                    // HASH/XOF/CXOF always ends here; AEAD word1 also ends here.
-                                    padded_tlast_o = 1'b1;
                                 end
                             end
                         end else begin
-                            // Non-final beat bookkeeping for AEAD block alignment.
                             word_count_next = is_aead_mode ? ~word_count_reg : 1'b0;
                         end
                     end
@@ -251,7 +248,6 @@ module ascon_padder (
             end
 
             STATE_PAD_WORD1: begin
-                // Emit generated word0 for the AEAD two-word carry sequence.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = 64'h8000_0000_0000_0000;
@@ -265,7 +261,6 @@ module ascon_padder (
             end
 
            STATE_PAD_WORD2: begin
-                // Emit single carry word, or generated AEAD word1.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = pad_word2_data_reg;
@@ -282,4 +277,5 @@ module ascon_padder (
             default: next_state = STATE_IDLE_PASS;
         endcase
     end
+
 endmodule
