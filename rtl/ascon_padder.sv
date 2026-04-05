@@ -153,11 +153,9 @@ module ascon_padder (
                     if (s_axis_tvalid_i && s_axis_tlast_i) begin
                         if (s_axis_tkeep_i == 8'hFF) begin
                             // Full word requires a spillover carry block, so delay TLAST.
-                            // Exception: AEAD block completes on word 1, so assert TLAST now.
-                            if (is_aead_mode && word_count_reg != 1'b0) padded_tlast_o = 1'b1;
-                            else padded_tlast_o = 1'b0;
+                            padded_tlast_o = 1'b0;
                         end else begin
-                            // Partial word absorbs the 0x80 padding perfectly.
+                            // Partial word (or 0-byte word) absorbs the 0x80 padding perfectly.
                             // Exception: AEAD word 0 needs a subsequent zero-word to align 128 bits.
                             if (is_aead_mode && word_count_reg == 1'b0) padded_tlast_o = 1'b0;
                             else padded_tlast_o = 1'b1;
@@ -244,8 +242,11 @@ module ascon_padder (
     // pragma translate_off
     assert_axis_not_null: assert property (
         @(posedge clk) disable iff (rst)
-        !(s_axis_tvalid_i && s_axis_tkeep_i == 8'h00)
-    ) else $error("ascon_padder: Detected TVALID with TKEEP=0. This is semantically invalid for the Ascon padder.");
+        // AXI4-Stream Protocol Violation: Null transport (TVALID with TKEEP=0)
+        // is generally illegal, but we allow it specifically on TLAST=1
+        // to signal the end of a (possibly empty) message.
+        !(s_axis_tvalid_i && s_axis_tkeep_i == 8'h00 && !s_axis_tlast_i)
+    ) else $error("ascon_padder: Detected middle-of-stream TVALID with TKEEP=0. This is semantically invalid.");
     // pragma translate_on
 
 endmodule
