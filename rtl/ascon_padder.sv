@@ -217,7 +217,7 @@ module ascon_padder (
             end
 
            STATE_PAD_WORD2: begin
-                // WORD2: Emits the final 64-bit padding word (either the 0x80 carrier for r=64 
+                // WORD2: Emits the final 64-bit padding word (either the 0x80 carrier for r=64
                 // or a zero-filler for r=128) to complete the NIST SP 800-232 rate multiple.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
