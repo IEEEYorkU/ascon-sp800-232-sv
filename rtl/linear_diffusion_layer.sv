@@ -6,6 +6,8 @@
  * Ref: NIST SP 800-232
  */
 
+`timescale 1ns / 1ps
+
 import ascon_pkg::*;
 
 module linear_diffusion_layer(

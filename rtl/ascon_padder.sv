@@ -145,7 +145,11 @@ module ascon_padder (
                     // Downstream block-counters expect full words (no fractional TKEEP)
                     padded_tkeep_o = 8'hFF;
 
-                    // Override TLAST based on rate alignment needs
+                    // Override TLAST based on rate alignment needs.
+                    // NOTE: TLAST is driven combinationally and IS NOT guarded by READY.
+                    // This is intentional to comply with AXI4-Stream stability rules:
+                    // TLAST must remain stable while VALID is high and READY is low.
+                    // Downstream logic MUST only sample TLAST on a successful handshake.
                     if (s_axis_tvalid_i && s_axis_tlast_i) begin
                         if (s_axis_tkeep_i == 8'hFF) begin
                             // Full word requires a spillover carry block, so delay TLAST.
@@ -164,7 +168,9 @@ module ascon_padder (
                     if (s_axis_tvalid_i && padded_tready_i) begin
                         if (s_axis_tlast_i) begin
                             held_tuser_next = s_axis_tuser_i;
-                            word_count_next = 1'b0;
+                             // Reset word count on TLAST to ensure the next packet starts at word 0.
+                             // This assumes the upstream producer respects packet boundaries.
+                             word_count_next = 1'b0;
 
                             if (s_axis_tkeep_i == 8'hFF) begin
                                 if (is_aead_mode) begin
@@ -198,7 +204,8 @@ module ascon_padder (
             end
 
             STATE_PAD_WORD1: begin
-                // Emits generated Word 0 for AEAD dual-carry sequences
+                // WORD1: Emits the NIST SP 800-232 mandatory Ascon padding bit (0x80)
+                // to start a new supplemental block when the rate r=128 is perfectly full.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = 64'h8000_0000_0000_0000;
@@ -212,7 +219,8 @@ module ascon_padder (
             end
 
            STATE_PAD_WORD2: begin
-                // Emits final carry block (0x80... or 0x00...) and completes the packet
+                // WORD2: Emits the final 64-bit padding word (either the 0x80 carrier for r=64 
+                // or a zero-filler for r=128) to complete the NIST SP 800-232 rate multiple.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = pad_word2_data_reg;
@@ -229,5 +237,15 @@ module ascon_padder (
             default: next_state = STATE_IDLE_PASS;
         endcase
     end
+
+    // =======================================================================
+    // Safety Assertions (Simulation Only)
+    // =======================================================================
+    // pragma translate_off
+    assert_axis_not_null: assert property (
+        @(posedge clk) disable iff (rst)
+        !(s_axis_tvalid_i && s_axis_tkeep_i == 8'h00)
+    ) else $error("ascon_padder: Detected TVALID with TKEEP=0. This is semantically invalid for the Ascon padder.");
+    // pragma translate_on
 
 endmodule

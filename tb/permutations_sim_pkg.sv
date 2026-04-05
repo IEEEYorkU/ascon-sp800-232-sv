@@ -5,6 +5,8 @@
  * Ref: NIST SP 800-232
  */
 
+`timescale 1ns / 1ps
+
 package permutations_sim_pkg;
 
     import ascon_pkg::*;

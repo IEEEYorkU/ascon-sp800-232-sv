@@ -7,6 +7,8 @@
  * Ref: NIST SP 800-232
  */
 
+`timescale 1ns / 1ps
+
 import ascon_pkg::*;
 
 module constant_addition_layer (

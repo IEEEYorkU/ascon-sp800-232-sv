@@ -30,6 +30,7 @@
  *
  * Ref: NIST SP 800-232, Section 3
  */
+`timescale 1ns / 1ps
 
 import ascon_pkg::*;
 
