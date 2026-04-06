@@ -114,6 +114,7 @@ module hash_fsm (
     phase_t phase_reg, next_phase;
 
     logic [31:0] word_cnt, next_word_cnt; // Widened to 32-bit for XOF lengths
+    logic        abort_latch;
     logic [31:0] target_squeeze_words;
 
     // Calculate how many 64-bit words to squeeze based on xof_len_i (in bytes)
@@ -135,6 +136,13 @@ module hash_fsm (
             state     <= next_state;
             phase_reg <= next_phase;
             word_cnt  <= next_word_cnt;
+
+            // Capture abort pulse and latch until the next operation or IDLE
+            if (state == STATE_IDLE) begin
+                abort_latch <= 1'b0;
+            end else begin
+                abort_latch <= abort_latch | abort_i;
+            end
         end
     end
 
@@ -150,8 +158,9 @@ module hash_fsm (
         unique case (state)
             STATE_IDLE: begin
                 if (start_i) begin
-                    next_state = STATE_INIT;
-                    next_phase = PHASE_ABSORB;
+                    next_state    = STATE_INIT;
+                    next_phase    = PHASE_ABSORB;
+                    next_word_cnt = 32'd0;
                 end
             end
 
@@ -200,7 +209,7 @@ module hash_fsm (
                 if (m_axis_tready_i) begin
                     next_word_cnt = word_cnt + 32'd1;
                     // Check Termination Conditions (Hash256=4 words, or XOF Abort/Length)
-                    if (abort_i || ((mode_i == MODE_HASH256 || xof_len_i > 0) && next_word_cnt == target_squeeze_words)) begin
+                    if (abort_i || abort_latch || ((mode_i == MODE_HASH256 || xof_len_i > 0) && next_word_cnt == target_squeeze_words)) begin
                         next_state = STATE_DONE;
                     end else begin
                         next_state = STATE_PERM_START; // Permute between EVERY squeeze block
@@ -223,7 +232,7 @@ module hash_fsm (
         busy_o             = 1'b1;
         done_o             = 1'b0;
         start_perm_o       = 1'b0;
-        round_config_o     = 1'b0; // 0 = p^12 for Ascon-Hash/XOF
+        round_config_o     = 1'b1; // 1 = p^12 for Ascon-Hash/XOF
         write_en_o         = 1'b0;
         word_sel_o         = word_cnt[2:0];
         core_in_data_sel_o = DATA_IN_HASH_SEL; // Default to FSM data
@@ -276,8 +285,9 @@ module hash_fsm (
                 m_axis_tvalid_o = 1'b1;
                 word_sel_o      = 3'd0; // Squeeze ONLY from S0
 
-                // Assert TLAST on the final beat
-                m_axis_tlast_o = (next_state == STATE_DONE);
+                // Assert TLAST on the final beat independent of READY to ensure stability.
+                // Include the abort latch to safely terminate even if the abort pulse arrives while stalled.
+                m_axis_tlast_o = (abort_i || abort_latch || ((mode_i == MODE_HASH256 || xof_len_i > 0) && (word_cnt + 32'd1 == target_squeeze_words)));
             end
 
             STATE_DONE: begin

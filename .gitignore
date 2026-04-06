@@ -18,3 +18,22 @@ tb_main.make
 *.out
 ascon_sim
 sim.out
+
+# LibreLane & Physical Flow Outputs
+librelane/runs/
+librelane/*.v
+*.gds
+*.def
+*.lef
+*.mag
+
+oss-cad-suite/*
+*.dot
+*.svg
+ascon.json
+
+venv/
+sv2v-Linux/
+
+get-docker.sh
+librelane/

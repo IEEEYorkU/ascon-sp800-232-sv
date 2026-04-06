@@ -133,7 +133,7 @@ module ascon_top (
     logic           aead_s_axis_tready;
     logic [63:0]    aead_m_axis_tdata;
     logic [7:0]     aead_m_axis_tkeep;
-    logic [2:0]     aead_m_axis_tuser;
+    axi_tuser_t     aead_m_axis_tuser;
     logic           aead_m_axis_tlast;
     logic           aead_m_axis_tvalid;
 
@@ -142,9 +142,15 @@ module ascon_top (
     logic           hash_s_axis_tready;
     logic [63:0]    hash_m_axis_tdata;
     logic [7:0]     hash_m_axis_tkeep;
-    logic [2:0]     hash_m_axis_tuser;
+    axi_tuser_t     hash_m_axis_tuser;
     logic           hash_m_axis_tlast;
     logic           hash_m_axis_tvalid;
+
+    // --- Helper: Big-Endian to Little-Endian Output Swap ---
+    function automatic ascon_word_t swap_bytes(input ascon_word_t data);
+        return {data[7:0],   data[15:8],  data[23:16], data[31:24],
+                data[39:32], data[47:40], data[55:48], data[63:56]};
+    endfunction
 
     // =======================================================================
     // INTERNAL ARCHITECTURE & INSTANTIATIONS
@@ -211,7 +217,11 @@ module ascon_top (
 
             // AXI Stream Handshake Muxing
             padded_tready       = hash_s_axis_tready;
-            m_axis_tdata        = hash_m_axis_tvalid ? core_data_o : 64'b0; // Security: Don't broadcast garbage data when not valid
+
+            // Swap the Big-Endian core output back to Little-Endian for the AXI Master
+            // Security: Don't broadcast garbage data when not valid
+            m_axis_tdata        = hash_m_axis_tvalid ? swap_bytes(core_data_o) : 64'b0;
+
             m_axis_tvalid       = hash_m_axis_tvalid;
             m_axis_tlast        = hash_m_axis_tlast;
             m_axis_tuser        = hash_m_axis_tuser;
@@ -276,7 +286,7 @@ module ascon_top (
         aead_s_axis_tready = 1'b0;  // Don't consume any input
         aead_m_axis_tdata  = 64'b0;
         aead_m_axis_tkeep  = 8'b0;
-        aead_m_axis_tuser  = 3'b0;
+        aead_m_axis_tuser  = TUSER_RESERVED;
         aead_m_axis_tlast  = 1'b0;
         aead_m_axis_tvalid = 1'b0;  // Don't assert valid output
 

@@ -2,48 +2,15 @@
  * Module Name: ascon_padder
  * Author(s):   Kiet Le, Tirth Patel, Kevin Duong
  * Description:
- * AXI4-Stream pre-processor (Data Formatter/Framer) for the Ascon Hardware
- * Accelerator. This module acts as a pipeline stage between the raw external
- * AXI4-Stream data and the internal protocol-specific FSMs (AEAD and Hash).
+ * AXI4-Stream pre-processor and framer for the Ascon Hardware Accelerator.
  *
- * Architecture & Role:
- * By intercepting the raw AXI stream, this module abstracts away the complex
- * bit-level padding and rate-alignment rules of the NIST SP 800-232 standard.
- * This allows the downstream sub-FSMs to act as incredibly simple block-counters
- * that only trigger permutations when they see `padded_tlast == 1`.
- *
- * Key Responsibilities & Design Requirements:
- * * 1. The Ascon Padding Rule (TKEEP Translation)
- * - Ascon requires a single `1` bit appended immediately after the last
- * valid byte of a message, followed by `0`s to fill the block.
- * - The padder monitors `s_axis_tkeep` on the final word (`s_axis_tlast == 1`).
- * - It dynamically masks the invalid bytes and injects the `1000...0` bit
- * pattern. It then outputs `padded_tkeep = 8'hFF` so the FSMs do not
- * need to handle fractional bytes.
- *
- * 2. Rate Alignment State Machine (The 64-bit vs 128-bit Challenge)
- * - Ascon-Hash256 uses a 64-bit rate (1 word).
- * - Ascon-AEAD128 uses a 128-bit rate (2 words).
- * - If `mode_i` is AEAD, and a padded message ends perfectly on the *first*
- *   64-bit word of the 128-bit block, the padder must NOT assert `padded_tlast`.
- * - Instead, it must halt the upstream stream (`s_axis_tready = 0`), stall
- * for one clock cycle, output a *second* 64-bit word of pure `0`s, and
- * then assert `padded_tlast = 1` to tell the AEAD FSM the block is full.
- *
- * 3. TUSER Packet Filtering & The Decryption Exception
- * The module routes and modifies data strictly based on the `s_axis_tuser` flag:
- * * - GROUP A (Pass-through): TUSER_KEY, TUSER_NONCE, TUSER_TAG.
- * Action: Pass data and tlast through unmodified. Do not apply padding.
- * * - GROUP B (Pad on TLAST): TUSER_AD, TUSER_PT, TUSER_MSG, TUSER_Z.
- * Action: When `tlast == 1`, consume `tkeep`, apply the Ascon bit-padding
- * rule, handle rate alignment, and output `padded_tkeep = 8'hFF`.
- * * - GROUP C (The Decryption Exception): TUSER_CT (Ciphertext).
- * Action: STRICT PASS-THROUGH. Do not apply padding. Do not alter `tkeep`.
- * Why? During decryption, the AEAD FSM needs the exact fractional Ciphertext
- * bytes to overwrite the state, AND it needs the raw `TKEEP` signal to know
- * exactly where (\ell) to manually inject the padding bits via XOR.
- *
- * Ref: NIST SP 800-232 (Algorithm 4 Decryption, Algorithm 5 Hashing)
+ * Key Responsibilities:
+ * 1. Endian Swap: Converts external Little-Endian AXI data to internal Big-Endian.
+ * 2. Padding Injection: Appends Ascon's '10...0' pad to partial words (AD, PT, MSG, Z).
+ * 3. Rate Alignment: Manages 64-bit (Hash) vs 128-bit (AEAD) block boundaries,
+ * automatically generating zero-padded filler words when needed.
+ * 4. Pass-Through: Leaves unpadded streams (KEY, NONCE, CT) untouched to
+ * allow downstream FSMs to process fractional bytes directly.
  * ============================================================================= */
 
 `timescale 1ns / 1ps
@@ -54,30 +21,24 @@ module ascon_padder (
     input  logic          clk,
     input  logic          rst,
 
-    // -----------------------------------------------------------------------
     // Configuration
-    // -----------------------------------------------------------------------
     input  ascon_mode_t   mode_i,
 
-    // -----------------------------------------------------------------------
-    // Raw AXI4-Stream Slave (Data FROM Outside World)
-    // -----------------------------------------------------------------------
-    input  ascon_word_t   s_axis_tdata_i,  // Raw data input
-    input  logic [7:0]    s_axis_tkeep_i,  // Byte enable mask, indicates valid bytes in the last word
-    input  axi_tuser_t    s_axis_tuser_i,  // Identifies the type of data (AD, PT, MSG, KEY, NONCE, TAG, CT, Z)
-    input  logic          s_axis_tlast_i,  // High on the final word of the packet
-    input  logic          s_axis_tvalid_i, // Indicates that the input data is valid
-    output logic          s_axis_tready_o, // Tells the source to stop if the padder is not ready to accept data
+    // Raw AXI4-Stream Slave (Data FROM Outside World - LITTLE ENDIAN)
+    input  ascon_word_t   s_axis_tdata_i,
+    input  logic [7:0]    s_axis_tkeep_i,
+    input  axi_tuser_t    s_axis_tuser_i,
+    input  logic          s_axis_tlast_i,
+    input  logic          s_axis_tvalid_i,
+    output logic          s_axis_tready_o,
 
-    // -----------------------------------------------------------------------
-    // Padded AXI4-Stream Master (Data TO Top-Level Mux -> FSMs/Core)
-    // -----------------------------------------------------------------------
-    output ascon_word_t   padded_tdata_o,  // Post processes 64 bit word with Acson padding rules applied
-    output logic [7:0]    padded_tkeep_o,  // Forced to 8'hFF, EXCEPT for TUSER_CT
-    output axi_tuser_t    padded_tuser_o,  // Forwared or held metadata tag to maintain packet context
-    output logic          padded_tlast_o,  // High only when the block is fully rate-aligned
-    output logic          padded_tvalid_o, // Indicates packet is ready for the next stage (FSMs/Core)
-    input  logic          padded_tready_i  // Allows the core to stall the padder if it is not ready to accept data
+    // Padded AXI4-Stream Master (Data TO Internal Logic - BIG ENDIAN)
+    output ascon_word_t   padded_tdata_o,
+    output logic [7:0]    padded_tkeep_o,
+    output axi_tuser_t    padded_tuser_o,
+    output logic          padded_tlast_o,
+    output logic          padded_tvalid_o,
+    input  logic          padded_tready_i
 );
 
     // =======================================================================
@@ -85,153 +46,155 @@ module ascon_padder (
     // =======================================================================
     typedef enum logic [1:0] {
         STATE_IDLE_PASS = 2'b00,
-        STATE_PAD_WORD1 = 2'b01,
-        STATE_PAD_WORD2 = 2'b10
+        STATE_PAD_WORD1 = 2'b01, // Generates AEAD alignment zeros
+        STATE_PAD_WORD2 = 2'b10  // Generates 0x80... carry blocks
     } padder_state_t;
 
     padder_state_t state, next_state;
 
-    //internal tracking for the 128 bit (2 word) block alignment
-    // word_count = 0: First 64 bits of a block
-    // word_count = 1: Second 64 bits of a block
+    // Tracks 128-bit block alignment for AEAD (0 = 1st word, 1 = 2nd word)
     logic word_count_reg, word_count_next;
 
-    //determine if the current TUSER group requires padding or not
-    logic is_padding_group; // (AD, PT, MSG, Z)
+    // Identifies TUSER groups that require Ascon padding
+    logic is_padding_group;
     assign is_padding_group = (s_axis_tuser_i == TUSER_AD ||
                                s_axis_tuser_i == TUSER_PT ||
                                s_axis_tuser_i == TUSER_MSG ||
                                s_axis_tuser_i == TUSER_Z);
 
-    // -----------------------------------------------------------------------
-    // 1. Padding Generator (The 1000...0 Bit Injection Logic)
-    // -----------------------------------------------------------------------
+    logic is_aead_mode;
+    assign is_aead_mode = ((mode_i == MODE_AEAD_ENC) || (mode_i == MODE_AEAD_DEC));
+
+    // Registers for multi-cycle padding generation
     ascon_word_t masked_data, pad_word2_data_next, pad_word2_data_reg;
     axi_tuser_t held_tuser_next, held_tuser_reg;
 
-    logic is_aead_mode; //AEAD mode helper
-    assign is_aead_mode = ((mode_i == MODE_AEAD_ENC) || (mode_i == MODE_AEAD_DEC));
+    // -----------------------------------------------------------------------
+    // 1. Endianness & Padding Generators
+    // -----------------------------------------------------------------------
 
-    // Icarus does not support variable part-selects ([i*8 +: 8]) or break
-    // inside always_comb. The padding logic is therefore implemented as a
-    // function and wired via assign, which Icarus handles without restriction.
-    // The case enumerates every contiguous tkeep pattern Ascon can produce:
-    //   tkeep = 8'h00..8'h7F → inject 0x80 at the first invalid byte position
-    //   tkeep = 8'hFF        → full word, no padding here (carry word handles it)
+    // Reverses byte order of a 64-bit word
+    function automatic ascon_word_t swap_bytes(input ascon_word_t data);
+        return {data[7:0],   data[15:8],  data[23:16], data[31:24],
+                data[39:32], data[47:40], data[55:48], data[63:56]};
+    endfunction
+
+    // Converts LE AXI data directly into padded BE Ascon data based on TKEEP
     function automatic ascon_word_t apply_padding(
         input ascon_word_t data,
         input logic [7:0]  keep
     );
         case (keep)
-            8'h00:   apply_padding = {56'h00_00_00_00_00_00_00, 8'h80};                   // 0 valid bytes
-            8'h01:   apply_padding = {48'h00_00_00_00_00_00,    8'h80, data[7:0]};        // 1 valid byte
-            8'h03:   apply_padding = {40'h00_00_00_00_00,       8'h80, data[15:0]};       // 2 valid bytes
-            8'h07:   apply_padding = {32'h00_00_00_00,          8'h80, data[23:0]};       // 3 valid bytes
-            8'h0F:   apply_padding = {24'h00_00_00,             8'h80, data[31:0]};       // 4 valid bytes
-            8'h1F:   apply_padding = {16'h00_00,                8'h80, data[39:0]};       // 5 valid bytes
-            8'h3F:   apply_padding = { 8'h00,                   8'h80, data[47:0]};       // 6 valid bytes
-            8'h7F:   apply_padding = {                          8'h80, data[55:0]};       // 7 valid bytes
-            default: apply_padding = data; //8'hFF full word, no padding here (carry word handles it)
+            8'h00:   apply_padding = {8'h80, 56'h00_00_00_00_00_00_00};
+            8'h01:   apply_padding = {data[7:0], 8'h80, 48'h00_00_00_00_00_00};
+            8'h03:   apply_padding = {data[7:0], data[15:8], 8'h80, 40'h00_00_00_00_00};
+            8'h07:   apply_padding = {data[7:0], data[15:8], data[23:16], 8'h80, 32'h00_00_00_00};
+            8'h0F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], 8'h80, 24'h00_00_00};
+            8'h1F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], data[39:32], 8'h80, 16'h00_00};
+            8'h3F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], data[39:32], data[47:40], 8'h80, 8'h00};
+            8'h7F:   apply_padding = {data[7:0], data[15:8], data[23:16], data[31:24], data[39:32], data[47:40], data[55:48], 8'h80};
+            default: apply_padding = swap_bytes(data);
         endcase
     endfunction
 
-    // Power-Optimized Operand Isolation
+    // Power Optimization: Only compute padding on valid, final, partial words
+    // belonging to a padding group. Otherwise, just execute the byte-swap.
     always_comb begin
-        // Default: Pass data through
-        masked_data = s_axis_tdata_i;
+        masked_data = swap_bytes(s_axis_tdata_i);
 
-        // OPERAND ISOLATION:
-        // Only wake up and toggle the 64-bit padding multiplexers if we are
-        // actively receiving a valid, partial final-word of a padding group.
-        // This saves massive dynamic power during long CT/PT/MSG streams.
         if (s_axis_tvalid_i && is_padding_group && s_axis_tlast_i && (s_axis_tkeep_i != 8'hFF)) begin
             masked_data = apply_padding(s_axis_tdata_i, s_axis_tkeep_i);
         end
     end
 
     // -----------------------------------------------------------------------
-    // 2. State Machine Logic
+    // 2. Rate Alignment & Carry FSM
     // -----------------------------------------------------------------------
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            state <= STATE_IDLE_PASS;
-            held_tuser_reg <= TUSER_RESERVED;
+            state              <= STATE_IDLE_PASS;
+            held_tuser_reg     <= TUSER_RESERVED;
             pad_word2_data_reg <= '0;
-            word_count_reg <= 1'b0;
+            word_count_reg     <= 1'b0;
         end else begin
-            state <= next_state;
-            held_tuser_reg <= held_tuser_next;
+            state              <= next_state;
+            held_tuser_reg     <= held_tuser_next;
             pad_word2_data_reg <= pad_word2_data_next;
-            word_count_reg <= word_count_next;
+            word_count_reg     <= word_count_next;
         end
     end
 
     always_comb begin
-        // Default values for outputs and next state
-        next_state = state;
-        word_count_next = word_count_reg;
-
+        next_state          = state;
+        word_count_next     = word_count_reg;
         held_tuser_next     = held_tuser_reg;
         pad_word2_data_next = pad_word2_data_reg;
 
+        // Default Pass-Through Assignments
         s_axis_tready_o = padded_tready_i;
         padded_tvalid_o = s_axis_tvalid_i;
-        padded_tdata_o = s_axis_tdata_i;
-        padded_tkeep_o = s_axis_tkeep_i;
-        padded_tuser_o = s_axis_tuser_i;
-        padded_tlast_o = s_axis_tlast_i;
+        padded_tdata_o  = masked_data;
+        padded_tkeep_o  = s_axis_tkeep_i;
+        padded_tuser_o  = s_axis_tuser_i;
+        padded_tlast_o  = s_axis_tlast_i; // Defaults to transparent pass-through (CT, KEY)
 
         case (state)
             STATE_IDLE_PASS: begin
                 if (is_padding_group) begin
-                    // Padding groups are always delivered as full words downstream.
+                    // Downstream block-counters expect full words (no fractional TKEEP)
                     padded_tkeep_o = 8'hFF;
-                end
 
-                if (s_axis_tvalid_i && padded_tready_i) begin
-                    if (is_padding_group) begin
+                    // Override TLAST based on rate alignment needs.
+                    // NOTE: TLAST is driven combinationally and IS NOT guarded by READY.
+                    // This is intentional to comply with AXI4-Stream stability rules:
+                    // TLAST must remain stable while VALID is high and READY is low.
+                    // Downstream logic MUST only sample TLAST on a successful handshake.
+                    if (s_axis_tvalid_i && s_axis_tlast_i) begin
+                        if (s_axis_tkeep_i == 8'hFF) begin
+                            // Full word requires a spillover carry block, so delay TLAST.
+                            padded_tlast_o = 1'b0;
+                        end else begin
+                            // Partial word (or 0-byte word) absorbs the 0x80 padding perfectly.
+                            // Exception: AEAD word 0 needs a subsequent zero-word to align 128 bits.
+                            if (is_aead_mode && word_count_reg == 1'b0) padded_tlast_o = 1'b0;
+                            else padded_tlast_o = 1'b1;
+                        end
+                    end
+
+                    // FSM Transitions & Carry-Block Generation
+                    if (s_axis_tvalid_i && padded_tready_i) begin
                         if (s_axis_tlast_i) begin
-                            //Final part of a padding-group packet
                             held_tuser_next = s_axis_tuser_i;
-                            word_count_next = 1'b0;
+                             // Reset word count on TLAST to ensure the next packet starts at word 0.
+                             // This assumes the upstream producer respects packet boundaries.
+                             word_count_next = 1'b0;
 
                             if (s_axis_tkeep_i == 8'hFF) begin
-                                // Full final word: 0x80 must carry into generated word(s).
                                 if (is_aead_mode) begin
                                     if (word_count_reg == 1'b0) begin
-                                        // AEAD word0 full-final: generate word1 = 0x80..., then end block.
-                                        padded_tlast_o      = 1'b0;
+                                        // AEAD Word 0 full: Follow with 0x80 carry block
                                         pad_word2_data_next = 64'h8000_0000_0000_0000;
                                         next_state          = STATE_PAD_WORD2;
                                     end else begin
-                                        // AEAD word1 full-final: current block ends, then emit [0x80...][0x00...].
-                                        padded_tlast_o      = 1'b1;
+                                        // AEAD Word 1 full: Start new block with [0x80] then [0x00]
                                         pad_word2_data_next = 64'h0000_0000_0000_0000;
                                         next_state          = STATE_PAD_WORD1;
                                     end
                                 end else begin
-                                    // HASH/XOF/CXOF full-final: emit current block, then one carry block 0x80...
-                                    padded_tlast_o      = 1'b1;
+                                    // HASH/XOF full: Follow with 0x80 carry block
                                     pad_word2_data_next = 64'h8000_0000_0000_0000;
                                     next_state          = STATE_PAD_WORD2;
                                 end
                             end else begin
-                                //padding fits into current final word.
-                                padded_tdata_o = masked_data;
-
                                 if (is_aead_mode && (word_count_reg == 1'b0)) begin
-                                    // AEAD ended on word0: generate zero word1 to align 128-bit rate.
-                                    padded_tlast_o      = 1'b0;
+                                    // AEAD Word 0 partial: Follow with zero-block to align 128-bit boundary
                                     pad_word2_data_next = 64'h0000_0000_0000_0000;
                                     next_state          = STATE_PAD_WORD2;
-                                end else begin
-                                    // HASH/XOF/CXOF always ends here; AEAD word1 also ends here.
-                                    padded_tlast_o = 1'b1;
                                 end
                             end
                         end else begin
-                            // Non-final beat bookkeeping for AEAD block alignment.
+                            // Toggle AEAD word count on non-last beats
                             word_count_next = is_aead_mode ? ~word_count_reg : 1'b0;
                         end
                     end
@@ -239,7 +202,8 @@ module ascon_padder (
             end
 
             STATE_PAD_WORD1: begin
-                // Emit generated word0 for the AEAD two-word carry sequence.
+                // WORD1: Emits the NIST SP 800-232 mandatory Ascon padding bit (0x80)
+                // to start a new supplemental block when the rate r=128 is perfectly full.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = 64'h8000_0000_0000_0000;
@@ -253,7 +217,8 @@ module ascon_padder (
             end
 
            STATE_PAD_WORD2: begin
-                // Emit single carry word, or generated AEAD word1.
+                // WORD2: Emits the final 64-bit padding word (either the 0x80 carrier for r=64
+                // or a zero-filler for r=128) to complete the NIST SP 800-232 rate multiple.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = pad_word2_data_reg;
@@ -270,4 +235,18 @@ module ascon_padder (
             default: next_state = STATE_IDLE_PASS;
         endcase
     end
+
+    // =======================================================================
+    // Safety Assertions (Simulation Only)
+    // =======================================================================
+    // pragma translate_off
+    assert_axis_not_null: assert property (
+        @(posedge clk) disable iff (rst)
+        // AXI4-Stream Protocol Violation: Null transport (TVALID with TKEEP=0)
+        // is generally illegal, but we allow it specifically on TLAST=1
+        // to signal the end of a (possibly empty) message.
+        !(s_axis_tvalid_i && s_axis_tkeep_i == 8'h00 && !s_axis_tlast_i)
+    ) else $error("ascon_padder: Detected middle-of-stream TVALID with TKEEP=0. This is semantically invalid.");
+    // pragma translate_on
+
 endmodule
