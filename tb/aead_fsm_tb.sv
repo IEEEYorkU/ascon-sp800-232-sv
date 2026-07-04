@@ -89,22 +89,22 @@ module aead_fsm_tb;
     // 3. Core Response Logic (Emulator)
     // -------------------------------------------------------------------------
     always_ff @(posedge clk) begin
-        if (rst) 
+        if (rst)
             ascon_ready_i <= 1'b1;
         else if (start_perm_o)
-            ascon_ready_i <= 1'b0; 
+            ascon_ready_i <= 1'b0;
         else
-            ascon_ready_i <= 1'b1; 
+            ascon_ready_i <= 1'b1;
     end
 
     // -------------------------------------------------------------------------
     // 4. Handshake Tasks with Fatal Timeouts
     // -------------------------------------------------------------------------
-    
+
     // Task to wait for a signal condition with a strict timeout
     task automatic wait_with_timeout(ref logic sig, input logic val, input string name);
         int timeout_cnt = 0;
-        const int MAX_WAIT = 100; 
+        const int MAX_WAIT = 100;
         while (sig !== val) begin
             @(negedge clk);
             timeout_cnt++;
@@ -122,9 +122,9 @@ module aead_fsm_tb;
         padded_tuser_i  = user;
         padded_tlast_i  = last;
         padded_tvalid_i = 1'b1;
-        
+
         wait_with_timeout(padded_tready_o, 1'b1, "padded_tready_o");
-        
+
         @(negedge clk);
         padded_tvalid_i = 1'b0;
     endtask
@@ -134,7 +134,7 @@ module aead_fsm_tb;
     // -------------------------------------------------------------------------
     initial begin
         $display("Starting AEAD FSM Testbench with Fatal Timeouts...");
-        
+
         // Signal Initialization
         rst = 1;
         mode_i = MODE_AEAD_ENC;
@@ -158,14 +158,14 @@ module aead_fsm_tb;
         start_i = 0;
 
         // Stage: Initialization (Key x2, Nonce x2)
-        drive_input(64'h0011223344556677, TUSER_KEY,   0); 
+        drive_input(64'h0011223344556677, TUSER_KEY,   0);
         drive_input(64'h8899AABBCCDDEEFF, TUSER_KEY,   0);
         drive_input(64'h0102030405060708, TUSER_NONCE, 0);
         drive_input(64'h090A0B0C0D0E0F10, TUSER_NONCE, 1);
         $write(".");
 
         // Stage: Associated Data
-        drive_input(64'h4144445F44415441, TUSER_AD, 1); 
+        drive_input(64'h4144445F44415441, TUSER_AD, 1);
         $write(".");
 
         // Stage: Plaintext
@@ -179,7 +179,7 @@ module aead_fsm_tb;
         // --- TEST 2: Decryption ---
         $display("Executing Test 2: Decryption Flow");
         rst = 1; #20 rst = 0; @(negedge clk);
-        
+
         mode_i = MODE_AEAD_DEC;
         start_i = 1;
         @(negedge clk);
@@ -188,7 +188,7 @@ module aead_fsm_tb;
         // Init phase
         drive_input(64'h0, TUSER_KEY, 0);   drive_input(64'h0, TUSER_KEY, 0);
         drive_input(64'h0, TUSER_NONCE, 0); drive_input(64'h0, TUSER_NONCE, 1);
-        
+
         // Ciphertext phase
         drive_input(64'h0, TUSER_CT, 1);
 
@@ -197,14 +197,14 @@ module aead_fsm_tb;
         drive_input(64'h0123456789ABCDEF, TUSER_TAG, 1);
         $write(".");
 
-        // Verification phase logic: 
+        // Verification phase logic:
         // We supply the expected core data as the FSM transitions to ST_VERIFY
         // The FSM reads core_data_i twice.
         core_data_i = 64'hDEADBEEFCAFEBABE; @(negedge clk);
         core_data_i = 64'h0123456789ABCDEF;
 
         wait_with_timeout(done_o, 1'b1, "done_o");
-        
+
         if (tag_fail_o) $fatal(1, "Test Failed: Unexpected tag verification failure.");
         else            $display(" Success");
 

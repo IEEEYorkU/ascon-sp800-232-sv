@@ -253,7 +253,7 @@ module aead_fsm(
             //==============================================================================
             // PERM: Wait for permutation completion and dispatch by permutation context.
             ST_PERM: begin
-                if (perm_done && (!needs_post_perm || pp_done)) begin
+                if ((perm_done && !needs_post_perm) || (post_perm_active_r && pp_done)) begin
                     case (perm_ctx_r)
                         CTX_INIT : next_state = ST_AD;
                         CTX_AD   : next_state = is_enc ? ST_PT_IN : ST_CT_IN;
@@ -433,7 +433,7 @@ module aead_fsm(
                 CTX_FINAL_perm: XOR K into S3, S4
             */
             ST_PERM: begin
-                if (!perm_started_r) begin
+                if (!perm_started_r && !post_perm_active_r) begin
                     // Sub-phase 1: trigger permutation
                     start_perm_o   = 1'b1;
                     round_config_o = (perm_ctx_r == CTX_INIT || perm_ctx_r == CTX_FINAL)
@@ -629,7 +629,7 @@ module aead_fsm(
                 end
 
                 ST_PERM: begin
-                    if (!perm_started_r)
+                    if (!perm_started_r && !post_perm_active_r)
                         perm_started_r <= 1'b1;
 
                     if (perm_done) begin

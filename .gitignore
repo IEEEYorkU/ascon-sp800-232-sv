@@ -37,3 +37,6 @@ sv2v-Linux/
 
 get-docker.sh
 librelane/
+
+build.f
+*.pyc
