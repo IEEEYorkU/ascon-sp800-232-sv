@@ -16,19 +16,21 @@ This interface minimizes routing congestion by using a narrow 64-bit data path, 
 | **`clk`** | Input | 1 | System clock |
 | **`rst`** | Input | 1 | **Global Reset.** Only used for power-on reset. (Standard "clearing" is done by overwriting state with IVs) |
 | **`start_perm_i`** | Input | 1 | **Trigger.** A high pulse starts the permutation engine. |
-| **`round_config_i`** | Input | 1 | **Configuration.** Selects the number of rounds to run (e.g., 0=8 rounds, 1=12 rounds). Matches standard requirements for Init/Final vs. Data phases |
-| **`write_en_i`** | Input | 1 | **Write Enable.** When high, write `data_i` into the word selected by `word_sel_i`. |
+| **`round_config_i`** | Input | 1 | **Configuration.** Selects the number of rounds to run: `1` starts the round counter at 0 (runs rounds 0 to 11, total 12 rounds / $p^{12}$), while `0` starts it at 4 (runs rounds 4 to 11, total 8 rounds / $p^8$). |
+| **`write_en_i`** | Input | 1 | **Write Enable.** When high, writes `data_i` into the word selected by `word_sel_i`. |
 | **`word_sel_i`** | Input | 3 | **Address Selector.** Selects which of the five state words (S0:S4) to write to or read from. |
-| **`data_i`** | Input | 64 | **Input Data.** The 64-bit value to be written (or XORed) *directly* into the selected state word (overwriting or XORing into current value). |
+| **`data_i`** | Input | 64 | **Input Data.** The 64-bit value to be written *directly* into the selected state word, overwriting its current value. Note that the core does not perform internal XORing. |
 | **`data_o`** | Output | 64 | **Output Data.** Continuously outputs the current value of the state word selected by `word_sel_i`. |
-| **`ready_o`** | Output | 1 | **Completion Pulse/Idle Status.** High when the Core is waiting for commands. Low when a permutation is running. |
+| **`ready_o`** | Output | 1 | **Completion/Idle Status.** High when the Core is in the IDLE state and waiting for commands. Low when a permutation is actively running. |
 
-*(Note: The `xor_en_i` signal was marked as crossed out in the source document, so it has been omitted from this table for clarity.)*
+*(Note: The `xor_en_i` signal was present in earlier architectural designs but has been completely removed in the final RTL implementation to keep the core strictly decoupled from XOR logic.)*
 
 ---
 
 ### 3. Summary of Operation Flow
 The Controller interacts with this core in three distinct "Primitive Operations":
-1. **Load/Overwrite (Initialization):** Controller sets `word_sel_i` to 0..4 and pulses `write_en_i` to load IV, Key, and Nonce sequentially.
-2. **Permute (Round Function):** Controller sets `round_config_i` (e.g., to 12) and pulses `start_perm_i`. The controller waits until `ready_o` is set.
-3. **Absorb/Extract (Data Processing):** **Read:** Controller sets `word_sel_i`, reads `data_o` (State).
+1. **Load/Overwrite (Initialization):** The Controller sets `word_sel_i` to 0..4, sets `data_i` with the IV, Key, or Nonce, and asserts `write_en_i` to load them sequentially.
+2. **Permute (Round Function):** The Controller configures the rounds using `round_config_i` (1 for $p^{12}$, 0 for $p^8$) and pulses `start_perm_i`. It then waits for `ready_o` to assert.
+3. **Absorb/Extract (Data Processing):**
+   * **Read:** The Controller selects the desired lane via `word_sel_i` and reads the state word from `data_o`.
+   * **Write/XOR:** The Controller computes the XOR externally (e.g., using the top-level `xor64` module) and writes the result back into the core state by asserting `write_en_i` with the XORed result on `data_i`.
