@@ -86,7 +86,7 @@ module aead_fsm(
     // Plaintext / Ciphertext - AX4 stream from padder unit
     output ascon_word_t         m_axis_tdata_o,
     output logic [7:0]          m_axis_tkeep_o,
-    output logic [3:0]          m_axis_tuser_o,
+    output axi_tuser_t          m_axis_tuser_o,
     output logic                m_axis_tlast_o,
     output logic                m_axis_tvalid_o,
     input  logic                m_axis_tready_i
@@ -365,8 +365,8 @@ module aead_fsm(
         in_data_sel_o      = DATA_IN_AXI_SEL;
         padded_tready_o    = 1'b0;
         m_axis_tdata_o  = 64'd0;
-        m_axis_tkeep_o  = 8'hFF;
-        m_axis_tuser_o  = 4'd0;
+        m_axis_tkeep_o  = 8'd0;
+        m_axis_tuser_o  = TUSER_RESERVED;
         m_axis_tlast_o  = 1'b0;
         m_axis_tvalid_o = 1'b0;
 
@@ -494,7 +494,7 @@ module aead_fsm(
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = 1'b1;
                     m_axis_tkeep_o  = padded_tkeep_i;
-                    m_axis_tuser_o  = 4'(TUSER_CT);
+                    m_axis_tuser_o  = TUSER_CT;
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
@@ -511,7 +511,7 @@ module aead_fsm(
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = 1'b1;
                     m_axis_tkeep_o  = padded_tkeep_i;
-                    m_axis_tuser_o  = 4'(TUSER_PT);
+                    m_axis_tuser_o  = TUSER_PT;
                     m_axis_tlast_o  = padded_tlast_i;
                 end
             end
@@ -531,7 +531,7 @@ module aead_fsm(
             ST_ENC_TAG: begin
                 m_axis_tvalid_o = 1'b1;
                 m_axis_tkeep_o  = 8'hFF;
-                m_axis_tuser_o  = 4'(TUSER_TAG);
+                m_axis_tuser_o  = TUSER_TAG;
                 m_axis_tlast_o  = (tag_cnt_r == 1'b1);
                 word_sel_o      = (tag_cnt_r == 1'b0) ? 3'd3 : 3'd4;
                 m_axis_tdata_o  = core_data_i;

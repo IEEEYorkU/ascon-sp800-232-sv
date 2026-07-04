@@ -115,6 +115,20 @@ module ascon_top (
     xor_sel_t       aead_xor_sel, hash_xor_sel;
     data_sel_t      aead_in_data_sel, hash_in_data_sel;
 
+    // AEAD specific intermediate mapping
+    logic           aead_xor_en;
+    data_sel_t      aead_in_data_sel_raw;
+
+    always_comb begin
+        if (aead_xor_en) begin
+            aead_in_data_sel = DATA_IN_XOR_SEL;
+            aead_xor_sel     = (aead_in_data_sel_raw == DATA_IN_AXI_SEL) ? XOR_IN_AXI_SEL : XOR_IN_AEAD_SEL;
+        end else begin
+            aead_in_data_sel = aead_in_data_sel_raw;
+            aead_xor_sel     = XOR_IN_AEAD_SEL;
+        end
+    end
+
     // --- XOR Module Signals ---
     ascon_word_t    xor_op1, xor_op2, xor_res;
     xor_sel_t       xor_in_op2_sel;
@@ -229,73 +243,46 @@ module ascon_top (
         end
     end
 
-    // TODO: Think about AEAD after working on hash
     // --- AEAD FSM ---
-    // aead_fsm u_aead_fsm (
-    //     .clk            (clk),
-    //     .rst            (rst),
+    aead_fsm u_aead_fsm (
+        .clk             (clk),
+        .rst             (rst),
 
-    //     // AEAD FSM Control I/O
-    //     .mode_i         (mode_i),
-    //     .start_i        (start_i),           // Direct from top-level
-    //     .busy_o         (aead_busy),         // Intermediate wire for muxing
-    //     .done_o         (aead_done),         // Intermediate wire for muxing
-    //     .tag_fail_o     (aead_tag_fail),     // Intermediate wire for muxing
+        // AEAD FSM Control I/O
+        .mode_i          (mode_i),
+        .start_i         (start_i),           // Direct from top-level
+        .busy_o          (aead_busy),         // Intermediate wire for muxing
+        .done_o          (aead_done),         // Intermediate wire for muxing
+        .tag_fail_o      (aead_tag_fail),     // Intermediate wire for muxing
 
-    //     // Ascon Control I/O
-    //     .ascon_ready_i  (core_ready_o),
-    //     .start_perm_o   (aead_start_perm),
-    //     .round_config_o (aead_round_config),
-    //     .word_sel_o     (aead_word_sel),
-    //     .data_o         (aead_data_o),
-    //     .write_en_o     (aead_write_en),
-    //     .in_data_sel_o  (aead_in_data_sel),
-    //     .core_data_i    (core_data_o),       // Read state from core for Decryption/Tag
+        // Ascon Control I/O
+        .ascon_ready_i   (core_ready_o),
+        .start_perm_o    (aead_start_perm),
+        .round_config_o  (aead_round_config),
+        .word_sel_o      (aead_word_sel),
+        .data_o          (aead_data_o),
+        .write_en_o      (aead_write_en),
+        .xor_en_o        (aead_xor_en),
+        .in_data_sel_o   (aead_in_data_sel_raw),
+        .core_data_i     (core_data_o),       // Read state from core for Decryption/Tag
 
-    //     // --- AXI4-Stream Slave (Data coming IN) ---
-    //     // .s_axis_tdata_i  (s_axis_tdata),     // Direct from top-level
-    //     .s_axis_tkeep_i  (s_axis_tkeep),     // Direct from top-level
-    //     .s_axis_tuser_i  (s_axis_tuser),     // Direct from top-level
-    //     .s_axis_tlast_i  (s_axis_tlast),     // Direct from top-level
-    //     .s_axis_tvalid_i (s_axis_tvalid),    // Direct from top-level
-    //     .s_axis_tready_o (aead_s_axis_tready), // Intermediate wire for muxing
+        // --- AXI4-Stream Slave (Data coming IN) ---
+        .padded_tdata_i  (padded_tdata),     // Direct from padder
+        .padded_tkeep_i  (padded_tkeep),     // Direct from padder
+        .padded_tuser_i  (padded_tuser),     // Direct from padder
+        .padded_tlast_i  (padded_tlast),     // Direct from padder
+        .padded_tvalid_i (padded_tvalid),    // Direct from padder
+        .padded_tready_o (aead_s_axis_tready), // Intermediate wire for muxing
 
-    //     // --- AXI4-Stream Master (Data going OUT) ---
-    //     //.m_axis_tdata_o  (aead_m_axis_tdata),  // Intermediate wire for muxing
-    //     .m_axis_tkeep_o  (aead_m_axis_tkeep),  // Intermediate wire for muxing
-    //     .m_axis_tuser_o  (aead_m_axis_tuser),  // Intermediate wire for muxing
-    //     .m_axis_tlast_o  (aead_m_axis_tlast),  // Intermediate wire for muxing
-    //     .m_axis_tvalid_o (aead_m_axis_tvalid), // Intermediate wire for muxing
-    //     .m_axis_tready_i (m_axis_tready)       // Direct from top-level
-    // );
+        // --- AXI4-Stream Master (Data going OUT) ---
+        .m_axis_tdata_o  (aead_m_axis_tdata),  // Intermediate wire for muxing
+        .m_axis_tkeep_o  (aead_m_axis_tkeep),  // Intermediate wire for muxing
+        .m_axis_tuser_o  (aead_m_axis_tuser),  // Intermediate wire for muxing
+        .m_axis_tlast_o  (aead_m_axis_tlast),  // Intermediate wire for muxing
+        .m_axis_tvalid_o (aead_m_axis_tvalid), // Intermediate wire for muxing
+        .m_axis_tready_i (m_axis_tready)       // Direct from top-level
+    );
 
-    // --- AEAD FSM STUB (FSM commented out, safe defaults), CAN DELETE LATER ---
-    always_comb begin
-        // Control outputs to core
-        aead_start_perm    = 1'b0;
-        aead_round_config  = 1'b0;
-        aead_word_sel      = 3'b000;
-        aead_write_en      = 1'b0;
-        aead_in_data_sel   = DATA_IN_AEAD_SEL; // or whichever enum zero-value is
-        aead_xor_sel       = XOR_IN_AEAD_SEL;
-
-        // Data output to core/XOR
-        aead_data_o        = 64'b0;
-
-        // AXI handshake outputs
-        aead_s_axis_tready = 1'b0;  // Don't consume any input
-        aead_m_axis_tdata  = 64'b0;
-        aead_m_axis_tkeep  = 8'b0;
-        aead_m_axis_tuser  = TUSER_RESERVED;
-        aead_m_axis_tlast  = 1'b0;
-        aead_m_axis_tvalid = 1'b0;  // Don't assert valid output
-
-        // Status
-        aead_busy          = 1'b0;
-        aead_done          = 1'b0;
-        aead_tag_fail      = 1'b0;
-    end
-    // --------------------------------------------------------------------------
 
     hash_fsm u_hash_fsm (
         .clk                    (clk),
