@@ -1,4 +1,4 @@
-name: PR - Verilog Build and Linter
+name: PR Build Pipeline
 
 on:
   push:
@@ -6,106 +6,22 @@ on:
       - main
   pull_request:
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
-  vsim-build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+  call-central-builder:
+    uses: IEEEYorkU/lascon-build-tools/.github/workflows/central-builder.yml@main
+    with:
+      # Automatically targets the repository and specific commit of the PR
+      rtl_repo: ${{ github.repository }}
+      commit_sha: ${{ github.sha }}
 
-      - name: Install Dependencies and 32-bit Libraries
-        run: |
-          # 1. Update and install core tools
-          sudo apt-get update
-          sudo apt-get install -y wget build-essential
+      # Your comma-separated top modules for the Yosys synthesis matrix
+      top_modules: 'ascon_top'
 
-          # 2. Add older repository for libncurses5:i386 (required on Ubuntu 22.04+)
-          echo "deb http://security.ubuntu.com/ubuntu focal-security main universe" | sudo tee -a /etc/apt/sources.list.d/focal-security.list
-
-          # 3. Enable 32-bit architecture and update
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-
-          # 4. Install all required 32-bit libraries
-          sudo apt-get install -y libc6:i386 libncurses5:i386 libstdc++6:i386 lib32ncurses6 libxft2 libxft2:i386 libxext6 libxext6:i386
-
-      - name: Download, Install, and Configure ModelSim
-        run: |
-          export INSTALL_DIR=/opt/intelFPGA_lite/20.1
-
-          # Prepare directory and ensure ownership belongs to the runner user
-          sudo mkdir -p $INSTALL_DIR
-          sudo chown -R $USER:$USER /opt
-
-          # Download and install ModelSim
-          wget -q https://downloads.intel.com/akdlm/software/acdsinst/20.1std.1/720/ib_installers/ModelSimSetup-20.1.1.720-linux.run -O modelsim_installer.run
-          chmod +x modelsim_installer.run
-
-          # Run installer unattended
-          ./modelsim_installer.run --mode unattended --accept_eula 1 --installdir $INSTALL_DIR
-          rm modelsim_installer.run
-
-          # Apply critical Linux patches to the vco script for compatibility
-          VCO_PATH="$INSTALL_DIR/modelsim_ase/vco"
-          sudo sed -i 's/linux_rh[[:digit:]]\+/linux/g' $VCO_PATH  # Fix Red Hat directory path
-          sudo sed -i 's/MTI_VCO_MODE:-\"\"/MTI_VCO_MODE:-\"32\"/g' $VCO_PATH # Force 32-bit mode
-
-          # Set the environment path for subsequent steps
-          echo "$INSTALL_DIR/modelsim_ase/bin" >> $GITHUB_PATH
-
-      - name: Verify Installation
-        run: |
-          vsim -version
-
-      - name: Run Simulation
-        run: |
-          source env.sh
-          make
-
-  # --- 1. Fast Simulation (Verilator) ---
-  verilator-build:
-    runs-on: ubuntu-latest
-    container: verilator/verilator:latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { submodules: recursive }
-      - run: apt-get update && apt-get install -y make g++
-      - run: make run_all SIM=verilator
-
-  # --- 2. Synthesis Check (Yosys + Slang) ---
-  # Ensures code can actually become hardware (catches latches/bad syntax)
-  synthesis-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup OSS CAD Suite
-        # This official action installs the latest nightly build natively
-        uses: YosysHQ/setup-oss-cad-suite@v3
-        with:
-          # Optional but recommended: prevents GitHub API rate limiting
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Dummy Synthesis with Slang
-        # -m slang  = load the Slang plugin
-        # read_slang = use Slang to parse the SystemVerilog natively
-        run: |
-          yosys -m slang -p "read_slang -f rtl.f; synth"
-
-  # --- 3. Linter ---
-  lint:
-    runs-on: ubuntu-latest
-    permissions:
-      checks: write
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: chipsalliance/verible-linter-action@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_args: "--rules=line-length=length:140"
+      enable_synth: true
+      enable_lint: true
+      enable_verilator: true
+      enable_vsim: true
