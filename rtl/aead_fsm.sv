@@ -39,7 +39,9 @@
  *   FSM simultaneously reads the current state word from ascon_core (via
  *   core_data_i), computes the transformed output (CT or PT), writes the
  *   updated state back to the core, and drives the AXI master interface — all
- *   within a single clock cycle.
+ *   within a single clock cycle. It utilizes the padder's sideband signals to
+ *   conditionally suppress outputs during padding blocks (ST_PT_IN) and perform
+ *   precise byte-wise masked writes during decryption (ST_CT_IN).
  * - Tag Verification: During decryption, the received tag words are latched in
  *   ST_DEC_TAG and compared against the computed tag words (S3, S4) in
  *   ST_VERIFY over two consecutive cycles using the combinational read port

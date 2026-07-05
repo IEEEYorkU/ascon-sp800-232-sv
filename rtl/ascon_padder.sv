@@ -9,8 +9,10 @@
  * 2. Padding Injection: Appends Ascon's '10...0' pad to partial words (AD, PT, MSG, Z).
  * 3. Rate Alignment: Manages 64-bit (Hash) vs 128-bit (AEAD) block boundaries,
  * automatically generating zero-padded filler words when needed.
- * 4. Pass-Through: Leaves unpadded streams (KEY, NONCE, CT) untouched to
- * allow downstream FSMs to process fractional bytes directly.
+ * 4. Pass-Through & Sidebands: Leaves unpadded streams (KEY, NONCE, CT) untouched
+ *    to allow downstream FSMs to process fractional bytes directly. Provides raw
+ *    stream byte-enables (padded_tkeep_raw_o) and padding indicator flags
+ *    (padded_is_padding_o) to assist downstream FSM state updates and masking.
  * ============================================================================= */
 
 `timescale 1ns / 1ps
