@@ -273,7 +273,8 @@ module ascon_top_tb;
         input ascon_word_t stream_data[],    // AXI input beats (LE): K0, K1, N0, N1, AD..., CT..., Tag0, Tag1
         input logic [7:0]  stream_keep[],
         input axi_tuser_t  stream_user[],
-        input logic        stream_last[]
+        input logic        stream_last[],
+        input logic        expected_tag_fail = 1'b0
     );
         int target_pt_words = exp_pt.size();
         ascon_word_t hw_pt[];
@@ -321,16 +322,24 @@ module ascon_top_tb;
 
         while (!done_o) @(posedge clk);
 
-        if (tag_fail_o) begin
-            $fatal(1, "   [FAIL] %s: Tag verification failed (tag_fail_o == 1).", test_name);
+        if (tag_fail_o !== expected_tag_fail) begin
+            $display("   [DEBUG DUMP] %s", test_name);
+            $display("   Expected Tag Fail: %b | Actual: %b", expected_tag_fail, tag_fail_o);
+            // In Decryption, the RTL compares core_data_i against rx_tag_r.
+            // But they are only valid during ST_VERIFY. Let's just print rx_tag_r which was latched.
+            $display("   RTL Latched RX Tag: %h %h", dut.u_aead_fsm.rx_tag_r[0], dut.u_aead_fsm.rx_tag_r[1]);
+            // And we can also display the expected tag (which was passed as stream data).
+            $fatal(1, "   [FAIL] %s: Tag verification mismatch. Expected %b, got %b.", test_name, expected_tag_fail, tag_fail_o);
         end
 
-        // Verify Output PT
-        for (int i = 0; i < target_pt_words; i++) begin
-            if (swap_bytes(hw_pt[i]) !== exp_pt[i]) begin
-                $display("\n   [DEBUG DUMP] %s (PT)", test_name);
-                for(int j=0; j<target_pt_words; j++) $display("   Word %0d | EXP: %h | HW_SWAPPED: %h", j, exp_pt[j], swap_bytes(hw_pt[j]));
-                $fatal(1, "   [FAIL] %s: Plaintext mismatch on Word %0d.", test_name, i);
+        // Verify Output PT only if we expect it to succeed
+        if (!expected_tag_fail) begin
+            for (int i = 0; i < target_pt_words; i++) begin
+                if (swap_bytes(hw_pt[i]) !== exp_pt[i]) begin
+                    $display("\n   [DEBUG DUMP] %s (PT)", test_name);
+                    for(int j=0; j<target_pt_words; j++) $display("   Word %0d | EXP: %h | HW_SWAPPED: %h", j, exp_pt[j], swap_bytes(hw_pt[j]));
+                    $fatal(1, "   [FAIL] %s: Plaintext mismatch on Word %0d.", test_name, i);
+                end
             end
         end
 
@@ -857,6 +866,312 @@ module ascon_top_tb;
                     '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1}
                 );
             end
+            // -------------------------------------------------------------------
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 2: Empty AD, 1-Block PT
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[2];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[2];
+
+                exp_ct[0] = swap_bytes(64'h0857ed8d78094ffe);
+                exp_ct[1] = swap_bytes(64'h73d050622be52c15);
+                exp_tag[0] = swap_bytes(64'hc4bd7ee75a5b419a);
+                exp_tag[1] = swap_bytes(64'h724c15523dbd4855);
+                exp_pt[0] = 64'h0000000000000000;
+                exp_pt[1] = 64'h0000000000000000;
+
+                execute_aead_enc_test("Ascon-AEAD128: Empty AD, 1-Block PT (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_PT, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: Empty AD, 1-Block PT (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0857ed8d78094ffe, 64'h73d050622be52c15, 64'hc4bd7ee75a5b419a, 64'h724c15523dbd4855},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 3: Partial AD, 1-Block PT
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[2];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[2];
+
+                exp_ct[0] = swap_bytes(64'h94803108c7950ed1);
+                exp_ct[1] = swap_bytes(64'hb7ff380d4e889886);
+                exp_tag[0] = swap_bytes(64'ha057f90d27a0d4e5);
+                exp_tag[1] = swap_bytes(64'h18f374d01e7da8f4);
+                exp_pt[0] = 64'h0000000000000000;
+                exp_pt[1] = 64'h0000000000000000;
+
+                execute_aead_enc_test("Ascon-AEAD128: Partial AD, 1-Block PT (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000006e6f637361, 64'h0000000000000000, 64'h0000000000000000},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'h1f, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_PT, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b1, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: Partial AD, 1-Block PT (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000006e6f637361, 64'h94803108c7950ed1, 64'hb7ff380d4e889886, 64'ha057f90d27a0d4e5, 64'h18f374d01e7da8f4},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'h1f, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 4: Multi-Block AD (2 blocks), 1-Block PT
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[2];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[2];
+
+                exp_ct[0] = swap_bytes(64'hcbe3e86c002f16c8);
+                exp_ct[1] = swap_bytes(64'h6c00e433e6886022);
+                exp_tag[0] = swap_bytes(64'h892d0f63eff12bb2);
+                exp_tag[1] = swap_bytes(64'h1155d24ff814f720);
+                exp_pt[0] = 64'h0000000000000000;
+                exp_pt[1] = 64'h0000000000000000;
+
+                execute_aead_enc_test("Ascon-AEAD128: Multi-Block AD (2 blocks), 1-Block PT (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h4141414141414141, 64'h4141414141414141, 64'h4141414141414141, 64'h4141414141414141, 64'h0000000000000000, 64'h0000000000000000},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_AD, TUSER_AD, TUSER_PT, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: Multi-Block AD (2 blocks), 1-Block PT (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h4141414141414141, 64'h4141414141414141, 64'h4141414141414141, 64'h4141414141414141, 64'hcbe3e86c002f16c8, 64'h6c00e433e6886022, 64'h892d0f63eff12bb2, 64'h1155d24ff814f720},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 5: Partial Multi-Block AD (2 full + 1 partial), 1-Block PT
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[2];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[2];
+
+                exp_ct[0] = swap_bytes(64'h09a32b479552232c);
+                exp_ct[1] = swap_bytes(64'h043602155ff21d15);
+                exp_tag[0] = swap_bytes(64'h37ed31d38b703ae2);
+                exp_tag[1] = swap_bytes(64'h44c08ee334c4ca35);
+                exp_pt[0] = 64'h0000000000000000;
+                exp_pt[1] = 64'h0000000000000000;
+
+                execute_aead_enc_test("Ascon-AEAD128: Partial Multi-Block AD (2 full + 1 partial), 1-Block PT (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h4141414141414141, 64'h4141414141414141, 64'h0000004141414141, 64'h0000000000000000, 64'h0000000000000000},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'h1f, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_AD, TUSER_PT, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: Partial Multi-Block AD (2 full + 1 partial), 1-Block PT (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h4141414141414141, 64'h4141414141414141, 64'h0000004141414141, 64'h09a32b479552232c, 64'h043602155ff21d15, 64'h37ed31d38b703ae2, 64'h44c08ee334c4ca35},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'h1f, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 6: 1-Block AD, Empty PT
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[0];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[0];
+
+                exp_tag[0] = swap_bytes(64'h42b008e8a4f66c43);
+                exp_tag[1] = swap_bytes(64'h1d3311e6a8074107);
+
+                execute_aead_enc_test("Ascon-AEAD128: 1-Block AD, Empty PT (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: 1-Block AD, Empty PT (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h42b008e8a4f66c43, 64'h1d3311e6a8074107},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 7: 1-Block AD, Partial PT
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[1];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[1];
+
+                exp_ct[0] = swap_bytes(64'h000000928c3b46ec);
+                exp_tag[0] = swap_bytes(64'he67847287cc4506c);
+                exp_tag[1] = swap_bytes(64'h8a5b1eed7a31e082);
+                exp_pt[0] = 64'h0000006f6c6c6568;
+
+                execute_aead_enc_test("Ascon-AEAD128: 1-Block AD, Partial PT (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000006f6c6c6568},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'h1f},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: 1-Block AD, Partial PT (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h000000928c3b46ec, 64'he67847287cc4506c, 64'h8a5b1eed7a31e082},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'h1f, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 8: 1-Block AD, Multi-Block PT (2 blocks)
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[4];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[4];
+
+                exp_ct[0] = swap_bytes(64'heeb10cadb00773d4);
+                exp_ct[1] = swap_bytes(64'h86bea57250fabc5a);
+                exp_ct[2] = swap_bytes(64'h1f13eb453763c639);
+                exp_ct[3] = swap_bytes(64'hda4a7c2ed3d69bc7);
+                exp_tag[0] = swap_bytes(64'hd8a2dc714f63aa94);
+                exp_tag[1] = swap_bytes(64'h3bcfb52826e40788);
+                exp_pt[0] = 64'h5050505050505050;
+                exp_pt[1] = 64'h5050505050505050;
+                exp_pt[2] = 64'h5050505050505050;
+                exp_pt[3] = 64'h5050505050505050;
+
+                execute_aead_enc_test("Ascon-AEAD128: 1-Block AD, Multi-Block PT (2 blocks) (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h5050505050505050, 64'h5050505050505050, 64'h5050505050505050, 64'h5050505050505050},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_PT, TUSER_PT, TUSER_PT, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: 1-Block AD, Multi-Block PT (2 blocks) (Decryption)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'heeb10cadb00773d4, 64'h86bea57250fabc5a, 64'h1f13eb453763c639, 64'hda4a7c2ed3d69bc7, 64'hd8a2dc714f63aa94, 64'h3bcfb52826e40788},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 9: Non-Zero Data Vectors
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_ct[] = new[2];
+                ascon_word_t exp_tag[2];
+                ascon_word_t exp_pt[] = new[2];
+
+                exp_ct[0] = swap_bytes(64'h28e75d4038c7ddf5);
+                exp_ct[1] = swap_bytes(64'h11a7d5e9dfb1493c);
+                exp_tag[0] = swap_bytes(64'h3ef48e0385596cc9);
+                exp_tag[1] = swap_bytes(64'h7a3514043b9b5655);
+                exp_pt[0] = 64'h3736353433323130;
+                exp_pt[1] = 64'h3f3e3d3c3b3a3938;
+
+                execute_aead_enc_test("Ascon-AEAD128: Non-Zero Data Vectors (Encryption)",
+                    exp_ct, exp_tag,
+                    '{64'h0706050403020100, 64'h0f0e0d0c0b0a0908, 64'h1716151413121110, 64'h1f1e1d1c1b1a1918, 64'h2726252423222120, 64'h2f2e2d2c2b2a2928, 64'h3736353433323130, 64'h3f3e3d3c3b3a3938},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_PT, TUSER_PT},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+
+                execute_aead_dec_test("Ascon-AEAD128: Non-Zero Data Vectors (Decryption)",
+                    exp_pt,
+                    '{64'h0706050403020100, 64'h0f0e0d0c0b0a0908, 64'h1716151413121110, 64'h1f1e1d1c1b1a1918, 64'h2726252423222120, 64'h2f2e2d2c2b2a2928, 64'h28e75d4038c7ddf5, 64'h11a7d5e9dfb1493c, 64'h3ef48e0385596cc9, 64'h7a3514043b9b5655},
+                    '{8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hff, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 11: Negative (Corrupted Tag)
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_pt[] = new[2];
+                exp_pt[0] = 64'h0;
+                exp_pt[1] = 64'h0;
+                execute_aead_dec_test("Ascon-AEAD128: Negative (Corrupted Tag)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'hbee15cfde0572384, 64'hd6eef52200aaec0a, 64'h10ac9f5095418dd0, 64'hea5a4abbce7a1753},
+                    '{8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1},
+                    1'b1
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 12: Negative (Corrupted CT)
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_pt[] = new[2];
+                exp_pt[0] = 64'h0;
+                exp_pt[1] = 64'h0;
+                execute_aead_dec_test("Ascon-AEAD128: Negative (Corrupted CT)",
+                    exp_pt,
+                    '{64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'hbee15cfde0572380, 64'hd6eef52200aaec0a, 64'h10ac9f5095418ddc, 64'hea5a4abbce7a1753},
+                    '{8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1},
+                    1'b1
+                );
+            end
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 13: Negative (Wrong Key)
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_pt[] = new[2];
+                exp_pt[0] = 64'h0;
+                exp_pt[1] = 64'h0;
+                execute_aead_dec_test("Ascon-AEAD128: Negative (Wrong Key)",
+                    exp_pt,
+                    '{64'h0101010101010101, 64'h0101010101010101, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'h0000000000000000, 64'hbee15cfde0572384, 64'hd6eef52200aaec0a, 64'h10ac9f5095418ddc, 64'hea5a4abbce7a1753},
+                    '{8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1},
+                    1'b1
+                );
+            end
+
         end
 
         $display("\n=========================================================================");
