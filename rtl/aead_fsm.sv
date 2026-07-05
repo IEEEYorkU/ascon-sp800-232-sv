@@ -256,7 +256,7 @@ module aead_fsm(
                 if ((perm_done && !needs_post_perm) || (post_perm_active_r && pp_done)) begin
                     case (perm_ctx_r)
                         CTX_INIT : next_state = ST_AD;
-                        CTX_AD   : next_state = is_enc ? ST_PT_IN : ST_CT_IN;
+                        CTX_AD   : next_state = ad_last_seen_r ? (is_enc ? ST_PT_IN : ST_CT_IN) : ST_AD;
                         CTX_DATA : next_state = is_enc ? ST_PT_IN : ST_CT_IN;
                         CTX_FINAL: next_state = is_enc ? ST_ENC_TAG : ST_DEC_TAG;
                         default  : next_state = ST_DONE;
@@ -271,7 +271,7 @@ module aead_fsm(
             ST_AD: begin
                 if (padded_tvalid_i && padded_tuser_i != TUSER_AD) begin
                     next_state = is_enc ? ST_PT_IN : ST_CT_IN;
-                end else if (ad_word_valid && padded_tlast_i) begin
+                end else if (ad_word_valid && (padded_tlast_i || ad_word_r == 1'b1)) begin
                     next_state = ST_PERM;
                 end else begin
                     next_state = ST_AD;
@@ -283,7 +283,8 @@ module aead_fsm(
             ST_PT_IN: begin
                 if (pt_word_valid) begin
                     if (padded_tlast_i) next_state = ST_TAG_INIT;
-                    else next_state = ST_PERM;
+                    else if (dat_word_r == 1'b1) next_state = ST_PERM;
+                    else next_state = ST_PT_IN;
                 end else begin
                     next_state = ST_PT_IN;
                 end
@@ -294,7 +295,8 @@ module aead_fsm(
             ST_CT_IN: begin
                 if (ct_word_valid) begin
                     if (padded_tlast_i) next_state = ST_TAG_INIT;
-                    else next_state = ST_PERM;
+                    else if (dat_word_r == 1'b1) next_state = ST_PERM;
+                    else next_state = ST_CT_IN;
                 end else begin
                     next_state = ST_CT_IN;
                 end
@@ -654,7 +656,7 @@ module aead_fsm(
                     end else if (phs && padded_tuser_i == TUSER_AD) begin
                         if (padded_tlast_i) begin
                             ad_last_seen_r <= 1'b1;
-                            perm_ctx_r     <= CTX_AD;
+                            perm_ctx_r     <= CTX_AD; // This MUST be set, or it loops back to CTX_INIT!
                             ad_word_r      <= 1'b0;
                         end else if (ad_word_r == 1'b1) begin
                             // Intermediate block complete → trigger p^b

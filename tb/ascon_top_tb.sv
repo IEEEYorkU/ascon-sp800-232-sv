@@ -177,6 +177,167 @@ module ascon_top_tb;
     endtask
 
     // =======================================================================
+    // AEAD Encryption Test Task
+    // =======================================================================
+    task automatic execute_aead_enc_test(
+        input string       test_name,
+        input ascon_word_t exp_ct[],         // Expected Ciphertext words (BE)
+        input ascon_word_t exp_tag[2],       // Expected Tag words (BE) — always 2
+        input ascon_word_t stream_data[],    // AXI input beats (LE): K0, K1, N0, N1, AD..., PT...
+        input logic [7:0]  stream_keep[],
+        input axi_tuser_t  stream_user[],
+        input logic        stream_last[]
+    );
+        int target_ct_words = exp_ct.size();
+        ascon_word_t hw_ct[];
+        ascon_word_t hw_tag[2];
+        int ct_words_collected = 0;
+        int tag_words_collected = 0;
+        logic monitor_done = 1'b0;
+
+        hw_ct = new[target_ct_words];
+
+        $display("[RUNNING] %s", test_name);
+
+        apply_reset();
+        mode_i = MODE_AEAD_ENC;
+        @(posedge clk); #1 start_i = 1; @(posedge clk); #1 start_i = 0;
+
+        // Drive AXI Stream dynamically based on the input arrays
+        fork
+            // Thread 1: Driver
+            begin
+                for (int i = 0; i < stream_data.size(); i++) begin
+                    s_axis_tdata  = stream_data[i];
+                    s_axis_tkeep  = stream_keep[i];
+                    s_axis_tuser  = stream_user[i];
+                    s_axis_tlast  = stream_last[i];
+                    s_axis_tvalid = 1'b1;
+
+                    do @(posedge clk); while (!s_axis_tready);
+                    #1;
+                end
+                s_axis_tvalid = 1'b0;
+                s_axis_tlast  = 1'b0;
+            end
+
+            // Thread 2: Monitor
+            begin
+                while (!monitor_done) begin
+                    @(posedge clk);
+                    if (m_axis_tvalid && m_axis_tready) begin
+                        if (m_axis_tuser == TUSER_CT) begin
+                            hw_ct[ct_words_collected] = m_axis_tdata;
+                            ct_words_collected++;
+                        end else if (m_axis_tuser == TUSER_TAG) begin
+                            hw_tag[tag_words_collected] = m_axis_tdata;
+                            tag_words_collected++;
+                        end
+                        if (m_axis_tlast && m_axis_tuser == TUSER_TAG) begin
+                            monitor_done = 1'b1;
+                        end
+                    end
+                end
+            end
+        join
+
+        while (!done_o) @(posedge clk);
+
+        // Verify Output CT
+        for (int i = 0; i < target_ct_words; i++) begin
+            if (swap_bytes(hw_ct[i]) !== exp_ct[i]) begin
+                $display("\n   [DEBUG DUMP] %s (CT)", test_name);
+                for(int j=0; j<target_ct_words; j++) $display("   Word %0d | EXP: %h | HW_SWAPPED: %h", j, exp_ct[j], swap_bytes(hw_ct[j]));
+                $fatal(1, "   [FAIL] %s: Ciphertext mismatch on Word %0d.", test_name, i);
+            end
+        end
+
+        // Verify Output Tag
+        for (int i = 0; i < 2; i++) begin
+            if (swap_bytes(hw_tag[i]) !== exp_tag[i]) begin
+                $display("\n   [DEBUG DUMP] %s (TAG)", test_name);
+                for(int j=0; j<2; j++) $display("   Word %0d | EXP: %h | HW_SWAPPED: %h", j, exp_tag[j], swap_bytes(hw_tag[j]));
+                $fatal(1, "   [FAIL] %s: Tag mismatch on Word %0d.", test_name, i);
+            end
+        end
+
+        $display("   [PASS]");
+    endtask
+
+    // =======================================================================
+    // AEAD Decryption Test Task
+    // =======================================================================
+    task automatic execute_aead_dec_test(
+        input string       test_name,
+        input ascon_word_t exp_pt[],         // Expected Plaintext words (BE)
+        input ascon_word_t stream_data[],    // AXI input beats (LE): K0, K1, N0, N1, AD..., CT..., Tag0, Tag1
+        input logic [7:0]  stream_keep[],
+        input axi_tuser_t  stream_user[],
+        input logic        stream_last[]
+    );
+        int target_pt_words = exp_pt.size();
+        ascon_word_t hw_pt[];
+        int pt_words_collected = 0;
+
+        hw_pt = new[target_pt_words];
+
+        $display("[RUNNING] %s", test_name);
+
+        apply_reset();
+        mode_i = MODE_AEAD_DEC;
+        @(posedge clk); #1 start_i = 1; @(posedge clk); #1 start_i = 0;
+
+        // Drive AXI Stream dynamically based on the input arrays
+        fork
+            // Thread 1: Driver
+            begin
+                for (int i = 0; i < stream_data.size(); i++) begin
+                    s_axis_tdata  = stream_data[i];
+                    s_axis_tkeep  = stream_keep[i];
+                    s_axis_tuser  = stream_user[i];
+                    s_axis_tlast  = stream_last[i];
+                    s_axis_tvalid = 1'b1;
+
+                    do @(posedge clk); while (!s_axis_tready);
+                    #1;
+                end
+                s_axis_tvalid = 1'b0;
+                s_axis_tlast  = 1'b0;
+            end
+
+            // Thread 2: Monitor
+            begin
+                while (pt_words_collected < target_pt_words) begin
+                    @(posedge clk);
+                    if (m_axis_tvalid && m_axis_tready) begin
+                        if (m_axis_tuser == TUSER_PT) begin
+                            hw_pt[pt_words_collected] = m_axis_tdata;
+                            pt_words_collected++;
+                        end
+                    end
+                end
+            end
+        join
+
+        while (!done_o) @(posedge clk);
+
+        if (tag_fail_o) begin
+            $fatal(1, "   [FAIL] %s: Tag verification failed (tag_fail_o == 1).", test_name);
+        end
+
+        // Verify Output PT
+        for (int i = 0; i < target_pt_words; i++) begin
+            if (swap_bytes(hw_pt[i]) !== exp_pt[i]) begin
+                $display("\n   [DEBUG DUMP] %s (PT)", test_name);
+                for(int j=0; j<target_pt_words; j++) $display("   Word %0d | EXP: %h | HW_SWAPPED: %h", j, exp_pt[j], swap_bytes(hw_pt[j]));
+                $fatal(1, "   [FAIL] %s: Plaintext mismatch on Word %0d.", test_name, i);
+            end
+        end
+
+        $display("   [PASS]");
+    endtask
+
+    // =======================================================================
     // Main Test Execution
     // =======================================================================
     ascon_state_t sw_ref_state;
@@ -614,6 +775,89 @@ module ascon_top_tb;
             '{TUSER_Z, TUSER_Z, TUSER_MSG},
             '{1'b0, 1'b1, 1'b1}
         );
+
+        $display("\nAscon-AEAD128 Tests");
+        $display("-------------------------------------------------------------------------");
+
+        // -------------------------------------------------------------------
+        // Ascon-AEAD128 TEST 1: Encryption Base Case (1-block AD, 1-block PT, all zeros)
+        // -------------------------------------------------------------------
+        begin
+            ascon_word_t AEAD128_IV = 64'h00001000808c0001;
+            ascon_word_t K0 = 64'h0, K1 = 64'h0;
+            ascon_word_t N0 = 64'h0, N1 = 64'h0;
+            ascon_word_t AD0 = 64'h0, AD1 = 64'h0;
+            ascon_word_t PT0 = 64'h0, PT1 = 64'h0;
+            ascon_word_t exp_ct[] = new[4]; // 2 words for PT, 2 words for Padding
+            ascon_word_t exp_tag[2];
+
+            // --- Initialization ---
+            sw_ref_state[0] = AEAD128_IV;
+            sw_ref_state[1] = K0;
+            sw_ref_state[2] = K1;
+            sw_ref_state[3] = N0;
+            sw_ref_state[4] = N1;
+            sw_ref_state = ascon_perm(1'b1, sw_ref_state);   // p^a (12 rounds)
+            sw_ref_state[3] ^= K0;  sw_ref_state[4] ^= K1;  // Post-init key XOR
+
+            // --- AD phase ---
+            // Block 1 (Data)
+            sw_ref_state[0] ^= AD0;  sw_ref_state[1] ^= AD1;
+            sw_ref_state = ascon_perm(1'b0, sw_ref_state);   // p^b (8 rounds)
+            // Block 2 (Padding injected by padder because TLAST=1 & perfectly aligned)
+            sw_ref_state[0] ^= 64'h8000_0000_0000_0000;
+            sw_ref_state = ascon_perm(1'b0, sw_ref_state);   // p^b (8 rounds)
+
+            sw_ref_state[4] ^= 64'h1;                        // Domain separation
+
+            // --- PT phase ---
+            // Block 1 (Data) - TLAST was intercepted, so hardware triggers a permutation
+            exp_ct[0] = sw_ref_state[0] ^ PT0;
+            exp_ct[1] = sw_ref_state[1] ^ PT1;
+            sw_ref_state[0] = exp_ct[0];  // State ← CT for encryption
+            sw_ref_state[1] = exp_ct[1];
+            sw_ref_state = ascon_perm(1'b0, sw_ref_state);   // p^b (8 rounds)
+
+            // Block 2 (Padding injected by padder, TLAST=1) -> No permutation
+            exp_ct[2] = sw_ref_state[0] ^ 64'h8000_0000_0000_0000;
+            exp_ct[3] = sw_ref_state[1] ^ 64'h0;
+            sw_ref_state[0] = exp_ct[2];
+            sw_ref_state[1] = exp_ct[3];
+
+            // --- Finalization ---
+            sw_ref_state[2] ^= K0;  sw_ref_state[3] ^= K1;  // Pre-perm key XOR (TAG_INIT: S2,S3)
+            sw_ref_state = ascon_perm(1'b1, sw_ref_state);    // p^a (12 rounds)
+            exp_tag[0] = sw_ref_state[3] ^ K0;               // Post-perm key XOR
+            exp_tag[1] = sw_ref_state[4] ^ K1;
+
+            execute_aead_enc_test("Ascon-AEAD128: Encryption (1-block AD, 1-block PT, All Zeros)",
+                exp_ct, exp_tag,
+                '{64'h0, 64'h0, 64'h0, 64'h0, 64'h0, 64'h0, 64'h0, 64'h0}, // K0, K1, N0, N1, AD0, AD1, PT0, PT1
+                '{8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF},
+                '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_PT, TUSER_PT},
+                '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1}
+            );
+
+            // -------------------------------------------------------------------
+            // Ascon-AEAD128 TEST 2: Decryption Base Case (Round-Trip, all zeros)
+            // -------------------------------------------------------------------
+            begin
+                ascon_word_t exp_pt[] = new[4];
+                exp_pt[0] = PT0;
+                exp_pt[1] = PT1;
+                exp_pt[2] = 64'h8000_0000_0000_0000;
+                exp_pt[3] = 64'h0;
+
+                // Stream: K0, K1, N0, N1, AD0, AD1, CT0, CT1, CT2, CT3, Tag0, Tag1
+                execute_aead_dec_test("Ascon-AEAD128: Decryption (Round-trip, All Zeros)",
+                    exp_pt,
+                    '{64'h0, 64'h0, 64'h0, 64'h0, 64'h0, 64'h0, swap_bytes(exp_ct[0]), swap_bytes(exp_ct[1]), swap_bytes(exp_ct[2]), swap_bytes(exp_ct[3]), swap_bytes(exp_tag[0]), swap_bytes(exp_tag[1])},
+                    '{8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'hFF},
+                    '{TUSER_KEY, TUSER_KEY, TUSER_NONCE, TUSER_NONCE, TUSER_AD, TUSER_AD, TUSER_CT, TUSER_CT, TUSER_CT, TUSER_CT, TUSER_TAG, TUSER_TAG},
+                    '{1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0, 1'b1}
+                );
+            end
+        end
 
         $display("\n=========================================================================");
         $display("   ALL AXI STREAM AND MATH TESTS PASSED!");

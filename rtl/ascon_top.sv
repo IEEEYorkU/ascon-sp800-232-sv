@@ -213,7 +213,7 @@ module ascon_top (
 
             // AXI Stream Handshake Muxing
             padded_tready       = aead_s_axis_tready;
-            m_axis_tdata        = aead_m_axis_tdata;
+            m_axis_tdata        = aead_m_axis_tvalid ? swap_bytes(aead_m_axis_tdata) : 64'b0;
             m_axis_tvalid       = aead_m_axis_tvalid;
             m_axis_tlast        = aead_m_axis_tlast;
             m_axis_tuser        = aead_m_axis_tuser;
