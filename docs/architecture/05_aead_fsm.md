@@ -30,6 +30,11 @@ During the Plaintext (`ST_PT_IN`) and Ciphertext (`ST_CT_IN`) processing phases,
 2. Computes the transformed output (Ciphertext or Plaintext).
 3. Writes the updated state back to the core while simultaneously driving the AXI Master interface.
 
+To ensure compliance with variable-length AXI4-Stream inputs:
+- **Output Suppression (`ST_PT_IN`):** The FSM uses the `padded_is_padding_i` handshake signal to suppress outputting ciphertext valid flags (`m_axis_tvalid_o = 1'b0`) during synthetic padding cycles.
+- **Decryption Masking (`ST_CT_IN`):** Since decryption requires overwriting state bytes with Ciphertext while XORing padding into the rest, the FSM performs a byte-wise masked write. It uses `padded_tkeep_raw_i` to select which bytes of `S0`/`S1` receive the incoming CT, and which bytes are XORed with the `0x80` padding bit.
+- **Raw TKEEP Propagation:** In both phases, `m_axis_tkeep_o` propagates the raw `padded_tkeep_raw_i` instead of the padded `padded_tkeep_i` so that downstream receivers see the exact byte lengths.
+
 #### D. Critical Spec Compliance & Finalization
 Per NIST SP 800-232, the final Plaintext or Ciphertext block **does not** trigger a standard permutation. The FSM strictly enforces this by bypassing the standard permutation state for the last block, moving directly into the `ST_TAG_INIT` phase where the Key is XORed into `S3` and `S4` before the final 12-round permutation. Following the final permutation, the Key is XORed into `S3` and `S4` once more to generate the authentication tag.
 
