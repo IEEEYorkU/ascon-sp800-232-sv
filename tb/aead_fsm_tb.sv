@@ -164,12 +164,14 @@ module aead_fsm_tb;
         drive_input(64'h090A0B0C0D0E0F10, TUSER_NONCE, 1);
         $write(".");
 
-        // Stage: Associated Data
-        drive_input(64'h4144445F44415441, TUSER_AD, 1);
+        // Stage: Associated Data (2 words to test 128-bit block boundaries)
+        drive_input(64'h4144445F44415441, TUSER_AD, 0);
+        drive_input(64'h4242424242424242, TUSER_AD, 1);
         $write(".");
 
-        // Stage: Plaintext
-        drive_input(64'h504C41494E545854, TUSER_PT, 1);
+        // Stage: Plaintext (2 words to test 128-bit block boundaries)
+        drive_input(64'h504C41494E545854, TUSER_PT, 0);
+        drive_input(64'h5858585858585858, TUSER_PT, 1);
         $write(".");
 
         // Finalization: Wait for done_o
@@ -189,7 +191,8 @@ module aead_fsm_tb;
         drive_input(64'h0, TUSER_KEY, 0);   drive_input(64'h0, TUSER_KEY, 0);
         drive_input(64'h0, TUSER_NONCE, 0); drive_input(64'h0, TUSER_NONCE, 1);
 
-        // Ciphertext phase
+        // Ciphertext phase (2 words to test 128-bit block boundaries)
+        drive_input(64'h0, TUSER_CT, 0);
         drive_input(64'h0, TUSER_CT, 1);
 
         // Tag load for comparison

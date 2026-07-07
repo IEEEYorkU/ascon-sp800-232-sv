@@ -9,8 +9,10 @@
  * 2. Padding Injection: Appends Ascon's '10...0' pad to partial words (AD, PT, MSG, Z).
  * 3. Rate Alignment: Manages 64-bit (Hash) vs 128-bit (AEAD) block boundaries,
  * automatically generating zero-padded filler words when needed.
- * 4. Pass-Through: Leaves unpadded streams (KEY, NONCE, CT) untouched to
- * allow downstream FSMs to process fractional bytes directly.
+ * 4. Pass-Through & Sidebands: Leaves unpadded streams (KEY, NONCE, CT) untouched
+ *    to allow downstream FSMs to process fractional bytes directly. Provides raw
+ *    stream byte-enables (padded_tkeep_raw_o) and padding indicator flags
+ *    (padded_is_padding_o) to assist downstream FSM state updates and masking.
  * ============================================================================= */
 
 `timescale 1ns / 1ps
@@ -32,13 +34,15 @@ module ascon_padder (
     input  logic          s_axis_tvalid_i,
     output logic          s_axis_tready_o,
 
-    // Padded AXI4-Stream Master (Data TO Internal Logic - BIG ENDIAN)
-    output ascon_word_t   padded_tdata_o,
-    output logic [7:0]    padded_tkeep_o,
-    output axi_tuser_t    padded_tuser_o,
-    output logic          padded_tlast_o,
-    output logic          padded_tvalid_o,
-    input  logic          padded_tready_i
+    // --- AXI4-Stream Master (Data going OUT) ---
+    output ascon_word_t         padded_tdata_o,
+    output logic [7:0]          padded_tkeep_o,
+    output logic [7:0]          padded_tkeep_raw_o, // Raw pass-through for exact Payload tracking
+    output axi_tuser_t          padded_tuser_o,
+    output logic                padded_tlast_o,
+    output logic                padded_tvalid_o,
+    output logic                padded_is_padding_o, // High when emitting artificial carry blocks
+    input  logic                padded_tready_i
 );
 
     // =======================================================================
@@ -136,8 +140,10 @@ module ascon_padder (
         padded_tvalid_o = s_axis_tvalid_i;
         padded_tdata_o  = masked_data;
         padded_tkeep_o  = s_axis_tkeep_i;
+        padded_tkeep_raw_o = s_axis_tkeep_i; // Unconditionally pass the raw TKEEP
         padded_tuser_o  = s_axis_tuser_i;
         padded_tlast_o  = s_axis_tlast_i; // Defaults to transparent pass-through (CT, KEY)
+        padded_is_padding_o = 1'b0;
 
         case (state)
             STATE_IDLE_PASS: begin
@@ -208,8 +214,10 @@ module ascon_padder (
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = 64'h8000_0000_0000_0000;
                 padded_tkeep_o  = 8'hFF;
+                padded_tkeep_raw_o = 8'h00; // Synthetic word has no real payload
                 padded_tuser_o  = held_tuser_reg;
                 padded_tlast_o  = 1'b0;
+                padded_is_padding_o = 1'b1;
 
                 if (padded_tready_i) begin
                     next_state = STATE_PAD_WORD2;
@@ -223,8 +231,10 @@ module ascon_padder (
                 padded_tvalid_o = 1'b1;
                 padded_tdata_o  = pad_word2_data_reg;
                 padded_tkeep_o  = 8'hFF;
+                padded_tkeep_raw_o = 8'h00; // Synthetic word has no real payload
                 padded_tuser_o  = held_tuser_reg;
                 padded_tlast_o  = 1'b1;
+                padded_is_padding_o = 1'b1;
 
                 if (padded_tready_i) begin
                     next_state      = STATE_IDLE_PASS;

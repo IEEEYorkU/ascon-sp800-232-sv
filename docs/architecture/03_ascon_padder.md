@@ -12,6 +12,9 @@ In this accelerator's "Decoupled Data/Control" architecture, the padder sits dir
 
 * **Upstream Flow Control:** The padder directly drives `s_axis_tready_o`, giving it the authority to halt the external data source if it needs extra clock cycles to generate artificial padding words.
 * **Downstream Flow Control:** The padder monitors `padded_tready_i` (driven by the active FSM) to know when its formatted output has been successfully consumed.
+* **Handshake Sidebands:** The padder provides two auxiliary signals to the downstream FSMs:
+  - `padded_tkeep_raw_o`: An unmodified copy of the original stream `s_axis_tkeep_i` used by the FSM to track precise payload boundaries (specifically needed for decryption state masking and masking raw AXI `m_axis_tkeep_o` output).
+  - `padded_is_padding_o`: Driven high when the padder is generating and emitting artificial carry blocks, instructing the FSM to suppress AXI stream master output valid flags (`m_axis_tvalid_o = 1'b0`) during those beats.
 * **Clean Datapath:** By the time data leaves the padder on the `padded_tdata_o` bus, it is mathematically complete and rate-aligned. The downstream FSMs never need to inspect `padded_tkeep_o` during standard absorption phases; they simply XOR the full 64-bit payload into the core.
 
 ---
