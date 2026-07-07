@@ -8,7 +8,7 @@ By: Lassonde Hardware Design Club under IEEE YorkU Student Chapter (York Univers
 ![Security](https://img.shields.io/badge/Security-128--bit-green)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
-A synthesizable, area-efficient SystemVerilog implementation of the [NIST SP 800-232 Ascon lightweight cryptography standard](https://csrc.nist.gov/pubs/sp/800/232/ipd). The design implements the core Ascon permutation and sponge construction, supporting both authenticated encryption and hashing operations in a unified hardware architecture.
+A synthesizable, area-efficient SystemVerilog implementation of the [NIST SP 800-232 Ascon lightweight cryptography standard](https://csrc.nist.gov/pubs/sp/800/232/final). The design implements the core Ascon permutation and sponge construction, supporting both authenticated encryption and hashing operations in a unified hardware architecture.
 
 ## Features
 
