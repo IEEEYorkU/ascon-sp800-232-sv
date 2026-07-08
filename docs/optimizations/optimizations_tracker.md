@@ -10,8 +10,8 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 | :--- | :---: |
 | 🟢 **Completed** | 0 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 0 |
-| 🔴 **Denied** | 0 |
+| 🔵 **Pending** | 9 |
+| 🔴 **Denied** | 3 |
 
 ---
 
@@ -59,3 +59,385 @@ To propose or track a new optimization, copy the markdown block below, append it
 ## Optimizations Log
 
 <!-- Append filled templates below this line -->
+
+### OPT-1: Serialize the S-box (Substitution Layer)
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances in `substitution_layer`) with a smaller number of S-box instances that process a subset of bit-columns per clock cycle. The middle-ground approach targets ~8 S-box instances processing 8 columns/cycle, yielding ~8× area reduction in the S-box with 8 cycles per substitution step.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Latency per round increases from 1 cycle to ~8 cycles (at 8-wide serialization). Total p¹² goes from 12 to ~96 cycles. Throughput reduced proportionally.
+- **Power:** Significant dynamic power reduction — fewer gates switching per cycle.
+- **Area:** ~8× reduction in substitution layer area (largest combinational block). Very high impact.
+
+#### Required Changes
+- [ ] `substitution_layer`: Replace 64-wide `generate` loop with parameterized width (e.g., 8) and add bit-column counter
+- [ ] `lascon_core`: Add new sub-state for multi-cycle S-box processing; modify round FSM to wait for S-box completion
+- [ ] `substitution_layer_tb`: Update to validate multi-cycle operation
+- [ ] `lascon_core_tb`: Update cycle-count expectations
+
+#### Difficulty
+- **Execution Difficulty:** Medium
+- **Justification/Risks:** Requires fundamental changes to the core FSM timing. All downstream integration tests must be updated. The `ready_o` handshake protocol remains unchanged, so higher-level FSMs should be unaffected.
+
+#### Notes & Decisions
+- **2026-07-07**: Proposed. Identified as the single largest area optimization opportunity. The middle-ground option (8-wide) offers a good area/performance balance. Under consideration.
+
+---
+
+### OPT-2: Fold the Permutation Round — Multi-Cycle per Round
+
+> [!WARNING]
+> **Denied (2026-07-07):** Does not align with design goals. Pipelining increases register count (area overhead) and the design does not need higher clock frequency.
+
+#### Status
+- [ ] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [x] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Pipeline the permutation round (p_C → p_S → p_L) into 2 or 3 clock stages to reduce the critical path and enable higher Fmax or voltage scaling.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Enables higher Fmax through shorter critical path.
+- **Power:** Potential for voltage scaling at lower Fmax targets.
+- **Area:** Increases area due to additional pipeline registers (5 × 64-bit = 320 FFs per pipeline stage).
+
+#### Required Changes
+- N/A (Denied)
+
+#### Difficulty
+- **Execution Difficulty:** Medium
+- **Justification/Risks:** Adds pipeline registers that increase area, contradicting the area-first priority.
+
+#### Notes & Decisions
+- **2026-07-07**: Denied. The design does not require higher clock frequency, and the additional pipeline registers would increase area — contrary to the project's area-first optimization priority.
+
+---
+
+### OPT-3: Replace S-box LUT with Boolean Logic
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Replace the 32-entry × 5-bit S-box LUT array in `substitution_layer` with the equivalent Boolean equations from NIST SP 800-232 Section 3.3. The Boolean form uses ~5 XOR + 5 AND + 1 NOT per bit-slice, mapping directly to standard cells without relying on synthesis tool LUT inference.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Negligible change — combinational depth is similar.
+- **Power:** Minor reduction — fewer internal nodes toggling vs. LUT decoder trees.
+- **Area:** Moderate reduction — predictable gate-level mapping vs. potentially bloated LUT inference.
+
+#### Required Changes
+- [ ] `substitution_layer`: Replace `Sbox` LUT with Boolean equations implementing the Ascon S-box
+- [ ] Verify against `substitution_layer_tb` and `lascon_core_tb`
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Drop-in replacement. Existing testbenches should pass without modification since the functional behavior is identical.
+
+#### Notes & Decisions
+- **2026-07-07**: Approved for implementation. Testing in progress.
+
+---
+
+### OPT-4: Eliminate Duplicate `swap_bytes` Function
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+The `swap_bytes` function is defined identically in both `lascon_padder` and `lascon_top`. Move it into `lascon_pkg` as a package-level function to eliminate duplication and improve maintainability.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None — byte reordering is pure routing (wire shuffle).
+- **Power:** None.
+- **Area:** None — zero synthesis impact.
+
+#### Required Changes
+- [ ] `lascon_pkg`: Add `swap_bytes` function
+- [ ] `lascon_padder`: Remove local `swap_bytes`, use package version
+- [ ] `lascon_top`: Remove local `swap_bytes`, use package version
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Pure code hygiene refactor. No functional or PPA risk.
+
+#### Notes & Decisions
+- **2026-07-07**: Approved. Low-effort cleanup.
+
+---
+
+### OPT-5: Gate the Inactive FSM (Clock or Data Gating)
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Both `aead_fsm` and `hash_fsm` are instantiated simultaneously in `lascon_top`. The inactive FSM's registers toggle on every clock edge, consuming unnecessary dynamic switching power. Gate the inactive FSM via RTL-level data gating (force `start_i = 0` and hold reset) or clock gating cells.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Moderate-to-significant dynamic power reduction — eliminates all register toggling in the inactive FSM.
+- **Area:** Minimal overhead (a few AND gates or one ICG cell).
+
+#### Required Changes
+- [ ] `lascon_top`: Add mode-based gating logic for `start_i` and/or `rst` to each FSM
+- [ ] Optional: Insert clock-gating cells (technology-dependent)
+- [ ] Integration test: Verify mode switching still works correctly after gating
+
+#### Difficulty
+- **Execution Difficulty:** Medium
+- **Justification/Risks:** RTL-level data gating (Option A) is portable and low-risk. Clock gating (Option B) requires technology-specific cells. Must verify that gated FSMs return to a clean state when re-activated.
+
+#### Notes & Decisions
+- **2026-07-07**: Approved for pursuit. RTL-level data gating (Option A) preferred initially for portability.
+
+---
+
+### OPT-6: Reduce the `word_cnt` / `xof_len` Counter Widths
+
+> [!WARNING]
+> **Denied (2026-07-07):** Maintaining full 32-bit width for maximum flexibility in XOF output length.
+
+#### Status
+- [ ] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [x] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Reduce `xof_len_i` from 32 bits to 16 or 12 bits to save flip-flops and associated adder/comparator logic.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Minor reduction.
+- **Area:** ~32–40 FFs saved.
+
+#### Required Changes
+- N/A (Denied)
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Limits maximum XOF output length.
+
+#### Notes & Decisions
+- **2026-07-07**: Denied. Prefer to maintain full 32-bit XOF length support for flexibility.
+
+---
+
+### OPT-7: Merge the Constant Addition into the Round Counter
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` with direct logic. The round constants follow the pattern `rc[i] = {~i[3:0], i[3:0]}`, so the LUT can be replaced with `{~rnd_cnt, rnd_cnt}` — a few inverters instead of a 12-entry memory.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Minor reduction — eliminates LUT decoder switching.
+- **Area:** Small reduction — removes 12×8 LUT, replaces with 4 inverters.
+
+#### Required Changes
+- [ ] `constant_addition_layer`: Replace `AsconRcLut` array with `{~rnd_i, rnd_i}` computation
+- [ ] Verify against `constant_addition_layer_tb`
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Minimal risk. The mathematical equivalence is easily verified.
+
+#### Notes & Decisions
+- **2026-07-07**: Pending. Acknowledged as a valid optimization, to be scheduled.
+
+---
+
+### OPT-8: Share Key Registers Between AEAD Phases
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+In `aead_fsm`, the 128-bit key is stored in `key_r[0:1]` (128 FFs) and the received tag is stored in `rx_tag_r[0:1]` (128 FFs). Since the key and received tag are never needed simultaneously, they can share the same 128-bit register file, saving 128 FFs.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Minor reduction — 128 fewer FFs toggling.
+- **Area:** Saves 128 flip-flops.
+
+#### Required Changes
+- [ ] `aead_fsm`: Merge `key_r` and `rx_tag_r` into a shared 2×64-bit register; update read/write logic
+- [ ] `aead_fsm_tb`: Verify both encryption and decryption flows still pass
+- [ ] `lascon_top_tb`: Full integration regression
+
+#### Difficulty
+- **Execution Difficulty:** Medium
+- **Justification/Risks:** Must carefully verify that no phase requires both key and tag simultaneously. The tag comparison in `ST_VERIFY` reads `rx_tag_r` while `key_r` is no longer needed (finalization XOR is already complete), so sharing is safe.
+
+#### Notes & Decisions
+- **2026-07-07**: Under consideration. Needs careful review of timing between key usage and tag reception.
+
+---
+
+### OPT-9: Remove `xor64` Module and Inline XOR
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+The `xor64` module is a trivial `assign res_o = op1_i ^ op2_i`. Inline the XOR directly into the `core_data_i` mux logic in `lascon_top`, removing one level of muxing (`xor_in_op2_sel`) and the associated control signals.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Marginal — one fewer mux level in the datapath.
+- **Area:** Small reduction — removes the `xor_sel_t` mux and simplifies control routing.
+
+#### Required Changes
+- [ ] `lascon_top`: Inline XOR into `core_data_i` selection mux; remove `xor64` instantiation and `xor_in_op2_sel` mux
+- [ ] `xor64.sv`: Delete file
+- [ ] `rtl.f`: Remove `xor64.sv` entry
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Functionally identical. Simplifies the top-level datapath.
+
+#### Notes & Decisions
+- **2026-07-07**: Under consideration.
+
+---
+
+### OPT-10: Parameterize for Single-Mode Builds
+
+> [!WARNING]
+> **Denied (2026-07-07):** Design must support all modes (AEAD + Hash/XOF) in a single build.
+
+#### Status
+- [ ] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [x] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Add top-level parameters (`ENABLE_AEAD`, `ENABLE_HASH`) to conditionally generate only the needed FSM(s), allowing deployment-specific area savings.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Significant — eliminates unused FSM entirely.
+- **Area:** High — removes entire FSM + associated mux logic for unused mode.
+
+#### Required Changes
+- N/A (Denied)
+
+#### Difficulty
+- **Execution Difficulty:** Medium
+- **Justification/Risks:** Creates build variants requiring separate verification passes.
+
+#### Notes & Decisions
+- **2026-07-07**: Denied. The design is required to support both AEAD and Hash/XOF modes in a unified build.
+
+---
+
+### OPT-11: Simplify the `apply_padding` Function in Padder
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Replace the 9-branch `case` statement in `lascon_padder`'s `apply_padding` function with mask-based logic: apply a byte mask derived from TKEEP to the byte-swapped data, then OR in the `0x80` padding bit at the correct position. This replaces mux branches with AND-OR operations and a priority encoder.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Negligible.
+- **Power:** Minor reduction — fewer mux select lines toggling.
+- **Area:** Small-to-moderate reduction — replaces wide mux tree with simpler AND-OR logic.
+
+#### Required Changes
+- [ ] `lascon_padder`: Replace `apply_padding` case statement with mask-based computation
+- [ ] Verify against `lascon_padder_tb`
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Low risk. Functionally equivalent. Existing testbench should catch any regressions.
+
+#### Notes & Decisions
+- **2026-07-07**: Under consideration.
+
+---
+
+### OPT-12: Reduce AEAD FSM State Encoding Width
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-07*
+
+#### Description
+Remove explicit sequential state value assignments (e.g., `= 4'd0, 4'd1...`) from the AEAD FSM `state_t` and `perm_ctx_t` enums. Let the synthesis tool choose the optimal encoding. Add `(* syn_encoding = "compact" *)` synthesis attributes to guide tools toward minimal-area encoding.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Tool-dependent — may slightly affect timing.
+- **Power:** Minor — fewer state bits means fewer FFs toggling.
+- **Area:** Small reduction — potential saving of 1–2 FFs depending on chosen encoding.
+
+#### Required Changes
+- [ ] `aead_fsm`: Remove explicit enum value assignments; add synthesis encoding attributes
+- [ ] Optional: Apply same treatment to `hash_fsm` state enum
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Transparent to simulation. Purely a synthesis-time optimization. May affect waveform debugging (state values become tool-assigned).
+
+#### Notes & Decisions
+- **2026-07-07**: Under consideration.
