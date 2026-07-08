@@ -10,7 +10,7 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 | :--- | :---: |
 | 🟢 **Completed** | 0 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 12 |
+| 🔵 **Pending** | 15 |
 | 🔴 **Denied** | 3 |
 
 ---
@@ -534,3 +534,93 @@ Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`,
 
 #### Notes & Decisions
 - **2026-07-08**: Identified as an area optimization strategy. Recommended as one of the top 2 best ROI. Marked as pending.
+
+---
+
+### OPT-16: Optimize Padder Carry Register Width
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-08*
+
+#### Description
+In `lascon_padder.sv`, the `pad_word2_data_reg` is a full 64-bit register used to emit the final padding word during `STATE_PAD_WORD2`. However, it only ever holds one of two constants: `64'h8000_0000_0000_0000` or `64'h0000_0000_0000_0000`. By replacing this 64-bit register with a 1-bit flag (e.g., `pad_word2_is_80_reg`), we can dynamically generate the 64-bit output combinatorially.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Minor reduction (fewer flip-flops switching).
+- **Area:** Saves 63 flip-flops in `lascon_padder`.
+
+#### Required Changes
+- [ ] `lascon_padder`: Replace `pad_word2_data_reg` and `pad_word2_data_next` with a 1-bit signal. Update `padded_tdata_o` logic in `STATE_PAD_WORD2` to use a ternary operator.
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Trivial functional equivalent change. Low risk. `lascon_padder_tb` should fully verify the change.
+
+#### Notes & Decisions
+- **2026-07-08**: Proposed as an easy area reduction. Marked as pending.
+
+---
+
+### OPT-17: Merge Mutually Exclusive AEAD Counters
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-08*
+
+#### Description
+In `aead_fsm.sv`, there are multiple discrete counters used for entirely different, mutually exclusive phases of the protocol: `init_cnt_r` (3-bit), `tag_init_cnt_r` (2-bit), `tag_cnt_r` (1-bit), `verify_cnt_r` (2-bit), and `post_perm_cnt_r` (2-bit). Since these phases never overlap, these counters can be merged into a single shared 3-bit counter register (e.g., `shared_cnt_r`).
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** None.
+- **Power:** Marginal reduction.
+- **Area:** Saves ~7 flip-flops and potentially simplifies control logic slightly.
+
+#### Required Changes
+- [ ] `aead_fsm`: Replace discrete counters with a single `shared_cnt_r`. Update state transition logic and action logic to reset and increment this shared counter in the respective states.
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Requires careful attention to state boundary transitions to ensure the shared counter is correctly reset before entering a new phase. Verified by `aead_fsm_tb` and `lascon_top_tb`.
+
+#### Notes & Decisions
+- **2026-07-08**: Proposed as an easy area reduction. Marked as pending.
+
+---
+
+### OPT-18: Replace Hash Squeeze Comparator with Down-Counter
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-08*
+
+#### Description
+In `hash_fsm.sv`, the squeeze termination condition compares a 32-bit up-counter (`word_cnt + 1`) against a dynamically calculated 32-bit target (`target_squeeze_words`). This requires a full 32-bit adder and a 32-bit equality comparator on the combinational path for `m_axis_tlast_o`. By changing this to a down-counter loaded with `target_squeeze_words` during initialization and counting down to 1, we can replace the bulky 32-bit comparator with a simple zero/one-detector.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Slightly improves critical path timing for `m_axis_tlast_o`.
+- **Power:** Minor reduction.
+- **Area:** Saves one 32-bit equality comparator.
+
+#### Required Changes
+- [ ] `hash_fsm`: Implement a `words_remaining_r` register. Load it with `target_squeeze_words` during initialization, decrement it during squeeze, and check `words_remaining_r == 32'd1` for `m_axis_tlast_o`.
+
+#### Difficulty
+- **Execution Difficulty:** Easy
+- **Justification/Risks:** Basic RTL refactor. `hash_fsm_tb` will verify correct squeeze lengths.
+
+#### Notes & Decisions
+- **2026-07-08**: Proposed as an easy area reduction. Marked as pending.
