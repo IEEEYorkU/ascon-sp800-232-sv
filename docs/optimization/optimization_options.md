@@ -22,6 +22,9 @@ To propose or track a new optimization, copy the markdown block below, append it
 ```markdown
 ### OPT-[ID]: [Title of Optimization]
 
+> [!WARNING]  <!-- Optional: Use Alert box for critical status updates, e.g. Denied -->
+> **Denied (YYYY-MM-DD):** [Reason for denial, e.g. Exceeded area budget]
+
 #### Status
 - [ ] **Pending**
 - [ ] **In-Progress**
@@ -45,6 +48,10 @@ To propose or track a new optimization, copy the markdown block below, append it
 #### Difficulty
 - **Execution Difficulty:** Easy / Medium / Hard
 - **Justification/Risks:** [Provide brief explanation of risk or design complexity]
+
+#### Notes & Decisions
+- **YYYY-MM-DD**: [Initial proposal notes or thoughts]
+- **YYYY-MM-DD**: [Subsequent design meeting notes, review results, or denial reasoning]
 ```
 
 ---
