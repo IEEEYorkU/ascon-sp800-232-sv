@@ -1,6 +1,6 @@
 /*
  * Module Name: substitution_layer
- * Author(s): Arthur Sabadini, Kevin Duong
+ * Author(s): Arthur Sabadini, Kevin Duong, Kiet Le
  * Description: The substitution layer applies a 5-bit nonlinear S-box in bit-sliced form across the entire state.
  *              This layer provides the "confusion" property to secure the state against linear analysis.
  * Ref: NIST SP 800-232
@@ -16,37 +16,40 @@ module substitution_layer (
 );
 
     // ----------------------------------------------------------------------
-    // S-box Look-Up Table (LUT)
+    // Parallel S-box Application via Boolean Logic
     // ----------------------------------------------------------------------
-    // See NIST SP 800-232 Section 3.3 Table 6
-    localparam logic [NUM_WORDS-1:0] Sbox [32] = '{
-        5'h4, 5'hb, 5'h1f, 5'h14, 5'h1a, 5'h15, 5'h9, 5'h2,
-        5'h1b, 5'h5, 5'h8, 5'h12, 5'h1d, 5'h3, 5'h6, 5'h1c,
-        5'h1e, 5'h13, 5'h7, 5'he, 5'h0, 5'hd, 5'h11, 5'h18,
-        5'h10, 5'hc, 5'h1, 5'h19, 5'h16, 5'ha, 5'hf, 5'h17
-    };
-
-    // ----------------------------------------------------------------------
-    // Parallel S-box Application
-    // ----------------------------------------------------------------------
+    // Implements Ascon S-box using Boolean equations from NIST SP 800-232 Section 3.3.
+    // This utilizes logical gates directly instead of relying on LUT inference.
     genvar j;
     generate
         for (j = 0; j < WORD_WIDTH; j++) begin : gen_sbox_loop
-            // Note that concatenation is needed here. As the
-            // input of the Sbox LUT must be a number.
-            assign {
-                state_array_o[0][j],
-                state_array_o[1][j],
-                state_array_o[2][j],
-                state_array_o[3][j],
-                state_array_o[4][j]
-            } = Sbox[{
-                state_array_i[0][j],
-                state_array_i[1][j],
-                state_array_i[2][j],
-                state_array_i[3][j],
-                state_array_i[4][j]
-            }];
+            logic x0, x1, x2, x3, x4;
+            logic t0, t1, t2, t3, t4;
+            logic y0, y1, y2, y3, y4;
+
+            assign x0 = state_array_i[0][j] ^ state_array_i[4][j];
+            assign x1 = state_array_i[1][j];
+            assign x2 = state_array_i[2][j] ^ state_array_i[1][j];
+            assign x3 = state_array_i[3][j];
+            assign x4 = state_array_i[4][j] ^ state_array_i[3][j];
+
+            assign t0 = ~x0;
+            assign t1 = ~x1;
+            assign t2 = ~x2;
+            assign t3 = ~x3;
+            assign t4 = ~x4;
+
+            assign y0 = x0 ^ (t1 & x2);
+            assign y1 = x1 ^ (t2 & x3);
+            assign y2 = x2 ^ (t3 & x4);
+            assign y3 = x3 ^ (t4 & x0);
+            assign y4 = x4 ^ (t0 & x1);
+
+            assign state_array_o[0][j] = y0 ^ y4;
+            assign state_array_o[1][j] = y1 ^ y0;
+            assign state_array_o[2][j] = ~y2;
+            assign state_array_o[3][j] = y3 ^ y2;
+            assign state_array_o[4][j] = y4;
         end
     endgenerate
 

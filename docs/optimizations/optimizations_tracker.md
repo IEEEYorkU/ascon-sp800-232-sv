@@ -129,12 +129,12 @@ Pipeline the permutation round (p_C → p_S → p_L) into 2 or 3 clock stages to
 ### OPT-3: Replace S-box LUT with Boolean Logic
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-08*
 
 #### Description
 Replace the 32-entry × 5-bit S-box LUT array in `substitution_layer` with the equivalent Boolean equations from NIST SP 800-232 Section 3.3. The Boolean form uses ~5 XOR + 5 AND + 1 NOT per bit-slice, mapping directly to standard cells without relying on synthesis tool LUT inference.
@@ -145,8 +145,8 @@ Replace the 32-entry × 5-bit S-box LUT array in `substitution_layer` with the e
 - **Area:** Moderate reduction — predictable gate-level mapping vs. potentially bloated LUT inference.
 
 #### Required Changes
-- [ ] `substitution_layer`: Replace `Sbox` LUT with Boolean equations implementing the Ascon S-box
-- [ ] Verify against `substitution_layer_tb` and `lascon_core_tb`
+- [x] `substitution_layer`: Replace `Sbox` LUT with Boolean equations implementing the Ascon S-box
+- [x] Verify against `substitution_layer_tb` and `lascon_core_tb`
 
 #### Difficulty
 - **Execution Difficulty:** Easy
@@ -154,6 +154,7 @@ Replace the 32-entry × 5-bit S-box LUT array in `substitution_layer` with the e
 
 #### Notes & Decisions
 - **2026-07-07**: Approved for implementation. Testing in progress.
+- **2026-07-08**: Completed implementation and verified using automated testbenches (`substitution_layer_tb`, `lascon_core_tb`, and `lascon_top_tb`) with ModelSim (`vsim`). All tests passed successfully.
 
 ---
 
