@@ -77,11 +77,7 @@ module lascon_padder (
     // 1. Endianness & Padding Generators
     // -----------------------------------------------------------------------
 
-    // Reverses byte order of a 64-bit word
-    function automatic ascon_word_t swap_bytes(input ascon_word_t data);
-        return {data[7:0],   data[15:8],  data[23:16], data[31:24],
-                data[39:32], data[47:40], data[55:48], data[63:56]};
-    endfunction
+
 
     // Converts LE AXI data directly into padded BE Ascon data based on TKEEP
     function automatic ascon_word_t apply_padding(

@@ -162,11 +162,7 @@ module lascon_top (
     logic           hash_m_axis_tlast;
     logic           hash_m_axis_tvalid;
 
-    // --- Helper: Big-Endian to Little-Endian Output Swap ---
-    function automatic ascon_word_t swap_bytes(input ascon_word_t data);
-        return {data[7:0],   data[15:8],  data[23:16], data[31:24],
-                data[39:32], data[47:40], data[55:48], data[63:56]};
-    endfunction
+
 
     // =======================================================================
     // INTERNAL ARCHITECTURE & INSTANTIATIONS

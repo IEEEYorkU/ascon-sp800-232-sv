@@ -161,12 +161,12 @@ Replace the 32-entry × 5-bit S-box LUT array in `substitution_layer` with the e
 ### OPT-4: Eliminate Duplicate `swap_bytes` Function
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-09*
 
 #### Description
 The `swap_bytes` function is defined identically in both `lascon_padder` and `lascon_top`. Move it into `lascon_pkg` as a package-level function to eliminate duplication and improve maintainability.
@@ -177,9 +177,9 @@ The `swap_bytes` function is defined identically in both `lascon_padder` and `la
 - **Area:** None — zero synthesis impact.
 
 #### Required Changes
-- [ ] `lascon_pkg`: Add `swap_bytes` function
-- [ ] `lascon_padder`: Remove local `swap_bytes`, use package version
-- [ ] `lascon_top`: Remove local `swap_bytes`, use package version
+- [x] `lascon_pkg`: Add `swap_bytes` function
+- [x] `lascon_padder`: Remove local `swap_bytes`, use package version
+- [x] `lascon_top`: Remove local `swap_bytes`, use package version
 
 #### Difficulty
 - **Execution Difficulty:** Easy
@@ -187,6 +187,7 @@ The `swap_bytes` function is defined identically in both `lascon_padder` and `la
 
 #### Notes & Decisions
 - **2026-07-07**: Approved. Low-effort cleanup.
+- **2026-07-09**: Completed implementation and verified using automated testbenches under Verilator. All tests passed.
 
 ---
 
