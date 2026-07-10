@@ -108,15 +108,13 @@ module lascon_core_tb;
         input ascon_state_t state_exp,
         input ascon_state_t state_o
     );
-        assert(
-            state_o == state_exp
-        )
+        if (state_o == state_exp) begin
             // Print a dot to show progress without flooding the console
             $write(".");
-        else begin
+        end else begin
             // Increment the error counter and print the mismatch, but DO NOT stop the simulation yet
             error_count++;
-            $error("\n[ERROR] State out is Incorrect!\nExpected: %x\nGot:      %x",
+            $display("\n[ERROR] State out is Incorrect!\nExpected: %x\nGot:      %x",
                     state_exp, state_o);
         end
     endtask
@@ -129,13 +127,15 @@ module lascon_core_tb;
 
     initial begin
         // Initialize
-        rst = 0;
+        rst = 1;
         start_perm_i = 0;
         round_config_i = 0;
         word_sel_i = 3'd0;
         write_en_i = 0;
         data_i = 320'd0;
         error_count = 0;
+
+        #10 rst = 0;
 
         // Exhaustive Tests
         $display("Exhaustive Random Input Test...");
