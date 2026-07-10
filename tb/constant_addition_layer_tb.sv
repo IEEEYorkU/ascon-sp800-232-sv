@@ -41,16 +41,16 @@ module constant_addition_layer_tb;
         input ascon_state_t exp,
         input ascon_state_t dut_out
     );
-        assert(
+        if (
             dut_out[0] == exp[0] &
             dut_out[1] == exp[1] &
             dut_out[3] == exp[3] &
             dut_out[4] == exp[4]
-        )
+        ) begin
             $write("."); // Print dot for progress
-        else begin
+        end else begin
             error_count++;
-            $error("\n[ERROR] x0, x1, x3, or x4 changed for Round: %0d!\nExpected: %16x, %16x, %16x, %16x\nGot:      %16x, %16x, %16x, %16x",
+            $display("\n[ERROR] x0, x1, x3, or x4 changed for Round: %0d!\nExpected: %16x, %16x, %16x, %16x\nGot:      %16x, %16x, %16x, %16x",
                     rnd, exp[0], exp[1], exp[3], exp[4], dut_out[0], dut_out[1], dut_out[3], dut_out[4]);
         end
     endtask
@@ -63,13 +63,13 @@ module constant_addition_layer_tb;
         input ascon_state_t exp,
         input ascon_state_t dut_out
     );
-        assert(
+        if (
             dut_out[2] == (exp[2] ^ dut.AsconRcLut[rnd])
-        )
+        ) begin
             $write("."); // Print dot for progress
-        else begin
+        end else begin
             error_count++;
-            $error("\n[ERROR] Problem with s2 for Round: %0d!\nExpected: %16x\nGot:      %16x",
+            $display("\n[ERROR] Problem with s2 for Round: %0d!\nExpected: %16x\nGot:      %16x",
                     rnd, (exp[2] ^ dut.AsconRcLut[rnd]), dut_out[2]);
         end
     endtask
