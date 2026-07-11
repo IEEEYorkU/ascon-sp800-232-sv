@@ -8,9 +8,9 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 
 | Status | Count |
 | :--- | :---: |
-| 🟢 **Completed** | 4 |
+| 🟢 **Completed** | 5 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 11 |
+| 🔵 **Pending** | 10 |
 | 🔴 **Denied** | 3 |
 
 ---
@@ -545,12 +545,12 @@ Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`,
 ### OPT-16: Optimize Padder Carry Register Width
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-08*
+*Last Updated: 2026-07-11*
 
 #### Description
 In `lascon_padder.sv`, the `pad_word2_data_reg` is a full 64-bit register used to emit the final padding word during `STATE_PAD_WORD2`. However, it only ever holds one of two constants: `64'h8000_0000_0000_0000` or `64'h0000_0000_0000_0000`. By replacing this 64-bit register with a 1-bit flag (e.g., `pad_word2_is_80_reg`), we can dynamically generate the 64-bit output combinatorially.
@@ -561,7 +561,7 @@ In `lascon_padder.sv`, the `pad_word2_data_reg` is a full 64-bit register used t
 - **Area:** Saves 63 flip-flops in `lascon_padder`.
 
 #### Required Changes
-- [ ] `lascon_padder`: Replace `pad_word2_data_reg` and `pad_word2_data_next` with a 1-bit signal. Update `padded_tdata_o` logic in `STATE_PAD_WORD2` to use a ternary operator.
+- [x] `lascon_padder`: Replace `pad_word2_data_reg` and `pad_word2_data_next` with a 1-bit signal. Update `padded_tdata_o` logic in `STATE_PAD_WORD2` to use a ternary operator.
 
 #### Difficulty
 - **Execution Difficulty:** Easy
