@@ -74,7 +74,6 @@ module aead_fsm(
     output logic     [2:0]      word_sel_o,  // Target state word address S0,S1,.., S4
     output ascon_word_t         data_o,
     output logic                write_en_o,
-    output logic                xor_en_o,
     output data_sel_t           in_data_sel_o,  // Mux select for core data_i source
 
     // Padded AXI STREAM from padder unit
@@ -428,7 +427,6 @@ module aead_fsm(
         word_sel_o         = 3'd0;
         data_o             = 64'd0;
         write_en_o         = 1'b0;
-        xor_en_o           = 1'b0;
         in_data_sel_o      = DATA_IN_AXI_SEL;
         padded_tready_o    = 1'b0;
         m_axis_tdata_o  = 64'd0;
@@ -453,7 +451,6 @@ module aead_fsm(
             ST_INIT: begin
                 if (init_cnt_r == 3'd0) begin
                     write_en_o     = lascon_ready_i;
-                    xor_en_o       = 1'b0;
                     in_data_sel_o  = DATA_IN_AEAD_SEL;
                     word_sel_o     = 3'd0;
                     data_o         = AEAD128_IV;
@@ -461,7 +458,6 @@ module aead_fsm(
                     padded_tready_o = 1'b1;
                     if (padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
                         write_en_o     = 1'b1;
-                        xor_en_o       = 1'b0;
                         in_data_sel_o  = DATA_IN_AXI_SEL;
                         word_sel_o     = init_cnt_r[2:0];
                     end
@@ -469,7 +465,6 @@ module aead_fsm(
                     padded_tready_o = 1'b1;
                     if (padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
                         write_en_o     = 1'b1;
-                        xor_en_o       = 1'b0;
                         in_data_sel_o  = DATA_IN_AXI_SEL;
                         word_sel_o     = init_cnt_r[2:0];
                     end
@@ -509,8 +504,7 @@ module aead_fsm(
                 end else if (post_perm_active_r) begin
                     // Sub-phase 3: post-perm XOR writes into state
                     write_en_o    = 1'b1;
-                    xor_en_o      = 1'b1;
-                    in_data_sel_o = DATA_IN_AEAD_SEL;
+                    in_data_sel_o = DATA_IN_XOR_AEAD_SEL;
 
                     case (perm_ctx_r)
                         CTX_INIT, CTX_FINAL: begin
@@ -543,14 +537,12 @@ module aead_fsm(
                     padded_tready_o = 1'b0;
                     // No AD present: apply domain separation once and proceed.
                     write_en_o    = 1'b1;
-                    xor_en_o      = 1'b1;
-                    in_data_sel_o = DATA_IN_AEAD_SEL;
+                    in_data_sel_o = DATA_IN_XOR_AEAD_SEL;
                     word_sel_o    = 3'd4;
                     data_o        = DSEP;
                 end else if (padded_tvalid_i && padded_tuser_i == TUSER_AD) begin
                     write_en_o    = 1'b1;
-                    xor_en_o      = 1'b1;
-                    in_data_sel_o = DATA_IN_AXI_SEL;
+                    in_data_sel_o = DATA_IN_XOR_AXI_SEL;
                     word_sel_o    = {2'b00, ad_word_r}; // 0=S0, 1=S1
                 end
             end
@@ -565,8 +557,7 @@ module aead_fsm(
                 padded_tready_o = padded_is_padding_i ? 1'b1 : m_axis_tready_i;
                 if (padded_tvalid_i && padded_tready_o) begin
                     write_en_o      = 1'b1;
-                    xor_en_o        = 1'b1;
-                    in_data_sel_o   = DATA_IN_AXI_SEL;
+                    in_data_sel_o   = DATA_IN_XOR_AXI_SEL;
                     word_sel_o      = {2'b00, dat_word_r};
                     m_axis_tdata_o  = core_data_i ^ padded_tdata_i;
                     m_axis_tvalid_o = ~padded_is_padding_i;
@@ -587,8 +578,7 @@ module aead_fsm(
                     pad_bit = get_padding_bit(padded_tkeep_raw_i);
 
                     write_en_o      = 1'b1;
-                    xor_en_o        = 1'b0; // We use direct overwrite because we manually compute the mixed value
-                    in_data_sel_o   = DATA_IN_AEAD_SEL;
+                    in_data_sel_o   = DATA_IN_AEAD_SEL; // We use direct overwrite because we manually compute the mixed value
                     word_sel_o      = {2'b00, dat_word_r};
 
                     // State update: Valid bytes take CT. Invalid bytes keep State ^ 0x80 (padding).
@@ -606,8 +596,7 @@ module aead_fsm(
             ST_TAG_INIT: begin
                 if (tag_init_cnt_r < 2'd2) begin
                     write_en_o    = 1'b1;
-                    xor_en_o      = 1'b1;
-                    in_data_sel_o = DATA_IN_AEAD_SEL;
+                    in_data_sel_o = DATA_IN_XOR_AEAD_SEL;
                     word_sel_o    = (tag_init_cnt_r == 2'd0) ? 3'd3 : 3'd4;
                     data_o        = (tag_init_cnt_r == 2'd0) ? key_r[0] : key_r[1];
                 end

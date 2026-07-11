@@ -8,9 +8,9 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 
 | Status | Count |
 | :--- | :---: |
-| 🟢 **Completed** | 3 |
+| 🟢 **Completed** | 4 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 12 |
+| 🔵 **Pending** | 11 |
 | 🔴 **Denied** | 3 |
 
 ---
@@ -324,12 +324,12 @@ In `aead_fsm`, the 128-bit key is stored in `key_r[0:1]` (128 FFs) and the recei
 ### OPT-9: Remove `xor64` Module and Inline XOR
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-11*
 
 #### Description
 The `xor64` module is a trivial `assign res_o = op1_i ^ op2_i`. Inline the XOR directly into the `core_data_i` mux logic in `lascon_top`, removing one level of muxing (`xor_in_op2_sel`) and the associated control signals.
@@ -340,9 +340,9 @@ The `xor64` module is a trivial `assign res_o = op1_i ^ op2_i`. Inline the XOR d
 - **Area:** Small reduction — removes the `xor_sel_t` mux and simplifies control routing.
 
 #### Required Changes
-- [ ] `lascon_top`: Inline XOR into `core_data_i` selection mux; remove `xor64` instantiation and `xor_in_op2_sel` mux
-- [ ] `xor64.sv`: Delete file
-- [ ] `rtl.f`: Remove `xor64.sv` entry
+- [x] `lascon_top`: Inline XOR into `core_data_i` selection mux; remove `xor64` instantiation and `xor_in_op2_sel` mux
+- [x] `xor64.sv`: Delete file
+- [x] `rtl.f`: Remove `xor64.sv` entry
 
 #### Difficulty
 - **Execution Difficulty:** Easy
@@ -350,6 +350,7 @@ The `xor64` module is a trivial `assign res_o = op1_i ^ op2_i`. Inline the XOR d
 
 #### Notes & Decisions
 - **2026-07-07**: Under consideration.
+- **2026-07-11**: Completed implementation. Removed `xor64` module, removed `xor_sel_t`, updated FSMs to drive `in_data_sel` for XOR directly, and inlined XOR operations in `lascon_top` datapath muxing. Verified via automated testbenches.
 
 ---
 

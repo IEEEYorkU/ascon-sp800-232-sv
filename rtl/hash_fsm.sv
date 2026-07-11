@@ -71,7 +71,6 @@ module hash_fsm (
     output ascon_word_t    data_o,         // Used to write the pre-computed Hash IVs
     output logic           write_en_o,
     output data_sel_t      core_in_data_sel_o,
-    output xor_sel_t       xor_sel_o,
 
     // -----------------------------------------------------------------------
     // Padded AXI4-Stream Slave (Data coming FROM the Padder)
@@ -236,7 +235,6 @@ module hash_fsm (
         write_en_o         = 1'b0;
         word_sel_o         = word_cnt[2:0];
         core_in_data_sel_o = DATA_IN_HASH_SEL; // Default to FSM data
-        xor_sel_o          = XOR_IN_AXI_SEL;
         padded_tready_o    = 1'b0;
         m_axis_tvalid_o    = 1'b0;
         m_axis_tlast_o     = 1'b0;
@@ -277,7 +275,7 @@ module hash_fsm (
                 if (padded_tvalid_i) begin
                     write_en_o         = 1'b1;
                     word_sel_o         = 3'd0; // Hash absorbs ONLY into S0
-                    core_in_data_sel_o = DATA_IN_XOR_SEL;
+                    core_in_data_sel_o = DATA_IN_XOR_AXI_SEL;
                 end
             end
 
