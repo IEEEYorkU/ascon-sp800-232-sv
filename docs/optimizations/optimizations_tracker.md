@@ -575,8 +575,8 @@ In `lascon_padder.sv`, the `pad_word2_data_reg` is a full 64-bit register used t
 ### OPT-17: Merge Mutually Exclusive AEAD Counters
 
 #### Status
-- [x] **Pending**
-- [ ] **In-Progress**
+- [ ] **Pending**
+- [X] **In-Progress**
 - [ ] **Completed**
 - [ ] **Denied**
 

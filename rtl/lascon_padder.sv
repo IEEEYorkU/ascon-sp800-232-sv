@@ -68,9 +68,9 @@ module lascon_padder (
 
     logic is_aead_mode;
     assign is_aead_mode = ((mode_i == MODE_AEAD_ENC) || (mode_i == MODE_AEAD_DEC));
-
+    logic pad_word2_is_80_reg, pad_word2_data_next;
     // Registers for multi-cycle padding generation
-    ascon_word_t masked_data, pad_word2_data_next, pad_word2_data_reg;
+    ascon_word_t masked_data;
     axi_tuser_t held_tuser_next, held_tuser_reg;
 
     // -----------------------------------------------------------------------
@@ -115,12 +115,12 @@ module lascon_padder (
         if (rst) begin
             state              <= STATE_IDLE_PASS;
             held_tuser_reg     <= TUSER_RESERVED;
-            pad_word2_data_reg <= '0;
+            pad_word2_is_80_reg <= '0;
             word_count_reg     <= 1'b0;
         end else begin
             state              <= next_state;
             held_tuser_reg     <= held_tuser_next;
-            pad_word2_data_reg <= pad_word2_data_next;
+            pad_word2_is_80_reg <= pad_word2_data_next;
             word_count_reg     <= word_count_next;
         end
     end
@@ -129,7 +129,7 @@ module lascon_padder (
         next_state          = state;
         word_count_next     = word_count_reg;
         held_tuser_next     = held_tuser_reg;
-        pad_word2_data_next = pad_word2_data_reg;
+        pad_word2_data_next = '0;   //since just defining 
 
         // Default Pass-Through Assignments
         s_axis_tready_o = padded_tready_i;
@@ -176,22 +176,23 @@ module lascon_padder (
                                 if (is_aead_mode) begin
                                     if (word_count_reg == 1'b0) begin
                                         // AEAD Word 0 full: Follow with 0x80 carry block
-                                        pad_word2_data_next = 64'h8000_0000_0000_0000;
+                                        // Changed to signal for 0x80
+                                        pad_word2_data_next = 1'b1;
                                         next_state          = STATE_PAD_WORD2;
                                     end else begin
                                         // AEAD Word 1 full: Start new block with [0x80] then [0x00]
-                                        pad_word2_data_next = 64'h0000_0000_0000_0000;
+                                        pad_word2_data_next = 1'b0;
                                         next_state          = STATE_PAD_WORD1;
                                     end
                                 end else begin
                                     // HASH/XOF full: Follow with 0x80 carry block
-                                    pad_word2_data_next = 64'h8000_0000_0000_0000;
+                                    pad_word2_data_next = 1'b1;
                                     next_state          = STATE_PAD_WORD2;
                                 end
                             end else begin
                                 if (is_aead_mode && (word_count_reg == 1'b0)) begin
                                     // AEAD Word 0 partial: Follow with zero-block to align 128-bit boundary
-                                    pad_word2_data_next = 64'h0000_0000_0000_0000;
+                                    pad_word2_data_next = 1'b0;
                                     next_state          = STATE_PAD_WORD2;
                                 end
                             end
@@ -225,7 +226,7 @@ module lascon_padder (
                 // or a zero-filler for r=128) to complete the NIST SP 800-232 rate multiple.
                 s_axis_tready_o = 1'b0;
                 padded_tvalid_o = 1'b1;
-                padded_tdata_o  = pad_word2_data_reg;
+                padded_tdata_o  = pad_word2_is_80_reg?64'h8000_0000_0000_0000:64'h0;
                 padded_tkeep_o  = 8'hFF;
                 padded_tkeep_raw_o = 8'h00; // Synthetic word has no real payload
                 padded_tuser_o  = held_tuser_reg;
