@@ -8,9 +8,9 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 
 | Status | Count |
 | :--- | :---: |
-| 🟢 **Completed** | 0 |
+| 🟢 **Completed** | 3 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 15 |
+| 🔵 **Pending** | 12 |
 | 🔴 **Denied** | 3 |
 
 ---
@@ -259,12 +259,12 @@ Reduce `xof_len_i` from 32 bits to 16 or 12 bits to save flip-flops and associat
 ### OPT-7: Merge the Constant Addition into the Round Counter
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-10*
 
 #### Description
 Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` with direct logic. The round constants follow the pattern `rc[i] = {~i[3:0], i[3:0]}`, so the LUT can be replaced with `{~rnd_cnt, rnd_cnt}` — a few inverters instead of a 12-entry memory.
@@ -275,8 +275,8 @@ Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` wi
 - **Area:** Small reduction — removes 12×8 LUT, replaces with 4 inverters.
 
 #### Required Changes
-- [ ] `constant_addition_layer`: Replace `AsconRcLut` array with `{~rnd_i, rnd_i}` computation
-- [ ] Verify against `constant_addition_layer_tb`
+- [x] `constant_addition_layer`: Replace `AsconRcLut` array with `{~rnd_i, rnd_i}` computation
+- [x] Verify against `constant_addition_layer_tb`
 
 #### Difficulty
 - **Execution Difficulty:** Easy
@@ -284,6 +284,8 @@ Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` wi
 
 #### Notes & Decisions
 - **2026-07-07**: Pending. Acknowledged as a valid optimization, to be scheduled.
+- **2026-07-10**: Completed implementation. Initial combinatorial replacement (`{~rnd_i, rnd_i}`) caused an unexpected area bloat in FPGA synthesis (LUTs increased by ~200) because it disrupted Yosys's optimization boundaries, allowing the constant addition logic to be flattened into the downstream S-box sub-optimally.
+- **2026-07-10 (Resolution)**: Applied the `(* keep *)` synthesis attribute to the combinatorial round constant wire. This preserved the logic boundary while retaining the clean code, resulting in better ASIC area (`14,578.0 GEs`, beating the baseline `14,610.5 GEs`), though Yosys FPGA mapping remained slightly higher than the hardcoded LUT baseline. All testbenches passed successfully.
 
 ---
 

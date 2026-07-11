@@ -25,6 +25,22 @@ module constant_addition_layer_tb;
     int error_count = 0;
     int prev_error_count = 0; // Variable to track errors per test
 
+    // Golden reference LUT for round constants
+    localparam logic [7:0] AsconRcLut [12] = '{
+        8'hf0, // i=0
+        8'he1, // i=1
+        8'hd2, // i=2
+        8'hc3, // i=3
+        8'hb4, // i=4
+        8'ha5, // i=5
+        8'h96, // i=6
+        8'h87, // i=7
+        8'h78, // i=8
+        8'h69, // i=9
+        8'h5a, // i=10
+        8'h4b  // i=11
+    };
+
     constant_addition_layer dut (
         .rnd_i(rnd_i),
         .state_array_i(state_array_i),
@@ -64,13 +80,13 @@ module constant_addition_layer_tb;
         input ascon_state_t dut_out
     );
         if (
-            dut_out[2] == (exp[2] ^ dut.AsconRcLut[rnd])
+            dut_out[2] == (exp[2] ^ AsconRcLut[rnd])
         ) begin
             $write("."); // Print dot for progress
         end else begin
             error_count++;
             $display("\n[ERROR] Problem with s2 for Round: %0d!\nExpected: %16x\nGot:      %16x",
-                    rnd, (exp[2] ^ dut.AsconRcLut[rnd]), dut_out[2]);
+                    rnd, (exp[2] ^ AsconRcLut[rnd]), dut_out[2]);
         end
     endtask
 

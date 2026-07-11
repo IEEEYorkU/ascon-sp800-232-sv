@@ -74,8 +74,8 @@ Drive the `s_axis_tuser` sideband signal to indicate the type of data being stre
 Ensure you initialize the build tools submodule when cloning:
 
 ```bash
-git clone --recurse-submodules https://github.com/IEEEYorkU/lascon-sp800-232-sv.git
-cd lascon-sp800-232-sv
+git clone --recurse-submodules https://github.com/IEEEYorkU/lascon-ip.git
+cd lascon-ip
 ```
 
 ### Running Tests
@@ -113,7 +113,7 @@ The accelerator is rigorously tested against software reference models. Continuo
 ## Repository Structure
 
 ```
-lascon/
+lascon-ip/
 ├── .github/      # CI/CD Workflows
 ├── build-tools/  # Submodule: Centralized build scripts
 ├── docs/         # Architecture documentation
