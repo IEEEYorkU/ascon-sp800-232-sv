@@ -112,26 +112,7 @@ module lascon_top (
     logic           aead_start_perm, hash_start_perm;
     logic           aead_round_config, hash_round_config;
     ascon_word_t    aead_data_o, hash_data_o;
-    xor_sel_t       aead_xor_sel, hash_xor_sel;
     data_sel_t      aead_in_data_sel, hash_in_data_sel;
-
-    // AEAD specific intermediate mapping
-    logic           aead_xor_en;
-    data_sel_t      aead_in_data_sel_raw;
-
-    always_comb begin
-        if (aead_xor_en) begin
-            aead_in_data_sel = DATA_IN_XOR_SEL;
-            aead_xor_sel     = (aead_in_data_sel_raw == DATA_IN_AXI_SEL) ? XOR_IN_AXI_SEL : XOR_IN_AEAD_SEL;
-        end else begin
-            aead_in_data_sel = aead_in_data_sel_raw;
-            aead_xor_sel     = XOR_IN_AEAD_SEL;
-        end
-    end
-
-    // --- XOR Module Signals ---
-    ascon_word_t    xor_op1, xor_op2, xor_res;
-    xor_sel_t       xor_in_op2_sel;
 
     // --- Padder Interconnect Wires ---
     // These carry the formatted stream from the padder to the internal logic
@@ -209,7 +190,6 @@ module lascon_top (
             core_word_sel_i     = aead_word_sel;
             core_write_en_i     = aead_write_en;
             core_in_data_sel    = aead_in_data_sel;
-            xor_in_op2_sel      = aead_xor_sel;
 
             // AXI Stream Handshake Muxing
             padded_tready       = aead_s_axis_tready;
@@ -227,7 +207,6 @@ module lascon_top (
             core_word_sel_i     = hash_word_sel;
             core_write_en_i     = hash_write_en;
             core_in_data_sel    = hash_in_data_sel;
-            xor_in_op2_sel      = hash_xor_sel;
 
             // AXI Stream Handshake Muxing
             padded_tready       = hash_s_axis_tready;
@@ -262,8 +241,7 @@ module lascon_top (
         .word_sel_o      (aead_word_sel),
         .data_o          (aead_data_o),
         .write_en_o      (aead_write_en),
-        .xor_en_o        (aead_xor_en),
-        .in_data_sel_o   (aead_in_data_sel_raw),
+        .in_data_sel_o   (aead_in_data_sel),
         .core_data_i     (core_data_o),       // Read state from core for Decryption/Tag
 
         // --- AXI4-Stream Slave (Data coming IN) ---
@@ -307,7 +285,6 @@ module lascon_top (
         .data_o                 (hash_data_o),       // Used to write the pre-computed Hash IVs into the core
         .write_en_o             (hash_write_en),
         .core_in_data_sel_o     (hash_in_data_sel),
-        .xor_sel_o              (hash_xor_sel),
 
         // --- Padded AXI4-Stream Slave (Data coming FROM the Padder) ---
         .padded_tuser_i         (padded_tuser),     // Tells FSM if it's Message (M) or Custom String (Z)
@@ -322,22 +299,6 @@ module lascon_top (
         .m_axis_tvalid_o        (hash_m_axis_tvalid), // Intermediate wire for muxing
         .m_axis_tready_i        (m_axis_tready)       // Direct from top-level
     );
-
-    // --- XOR Unit ---
-    xor64 u_xor64 (
-        .op1_i  (xor_op1),
-        .op2_i  (xor_op2),
-        .res_o  (xor_res)
-    );
-    assign xor_op1 = core_data_o;
-    always_comb begin
-        case(xor_in_op2_sel)
-            XOR_IN_AEAD_SEL : xor_op2 = aead_data_o;
-            XOR_IN_HASH_SEL : xor_op2 = hash_data_o;
-            XOR_IN_AXI_SEL  : xor_op2 = padded_tdata;
-            default         : xor_op2 = 64'd0;
-        endcase
-    end
 
     // --- Lascon Core ---
     lascon_core u_core (
@@ -354,11 +315,13 @@ module lascon_top (
     // Select Data Input
     always_comb begin
         case(core_in_data_sel)
-            DATA_IN_AEAD_SEL : core_data_i = aead_data_o;
-            DATA_IN_HASH_SEL : core_data_i = hash_data_o;
-            DATA_IN_AXI_SEL  : core_data_i = padded_tdata;
-            DATA_IN_XOR_SEL  : core_data_i = xor_res;
-            default          : core_data_i = 64'd0;
+            DATA_IN_AEAD_SEL     : core_data_i = aead_data_o;
+            DATA_IN_HASH_SEL     : core_data_i = hash_data_o;
+            DATA_IN_AXI_SEL      : core_data_i = padded_tdata;
+            DATA_IN_XOR_AXI_SEL  : core_data_i = core_data_o ^ padded_tdata;
+            DATA_IN_XOR_AEAD_SEL : core_data_i = core_data_o ^ aead_data_o;
+            DATA_IN_XOR_HASH_SEL : core_data_i = core_data_o ^ hash_data_o;
+            default              : core_data_i = 64'd0;
         endcase
     end
 

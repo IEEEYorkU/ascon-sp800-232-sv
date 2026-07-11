@@ -18,7 +18,6 @@ rtl/hash_fsm.sv
 rtl/aead_fsm.sv
 
 # 6. Helper Modules
-rtl/xor64.sv
 
 # 7. Lascon Top-Level
 rtl/lascon_top.sv

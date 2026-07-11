@@ -62,20 +62,14 @@ package lascon_pkg;
 
     // --- Lascon Core Data-In Select Enum ---
     // Selects what data is being fed into the lascon core
-    typedef enum logic [1:0] {
-        DATA_IN_AXI_SEL    = 2'b00,
-        DATA_IN_AEAD_SEL   = 2'b01,
-        DATA_IN_HASH_SEL   = 2'b10,
-        DATA_IN_XOR_SEL    = 2'b11
+    typedef enum logic [2:0] {
+        DATA_IN_AXI_SEL        = 3'b000,
+        DATA_IN_AEAD_SEL       = 3'b001,
+        DATA_IN_HASH_SEL       = 3'b010,
+        DATA_IN_XOR_AXI_SEL    = 3'b011,
+        DATA_IN_XOR_AEAD_SEL   = 3'b100,
+        DATA_IN_XOR_HASH_SEL   = 3'b101
     } data_sel_t;
-
-    // --- XOR OP2 Select Enum ---
-    // Selects what data is being fed into the xor unit
-    typedef enum logic [1:0] {
-        XOR_IN_AEAD_SEL = 2'b00,
-        XOR_IN_HASH_SEL = 2'b01,
-        XOR_IN_AXI_SEL  = 2'b10
-    } xor_sel_t;
 
     // Reverses byte order of a 64-bit word
     function automatic ascon_word_t swap_bytes(input ascon_word_t data);
