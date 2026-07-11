@@ -284,7 +284,8 @@ Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` wi
 
 #### Notes & Decisions
 - **2026-07-07**: Pending. Acknowledged as a valid optimization, to be scheduled.
-- **2026-07-10**: Completed implementation and verified using automated testbenches (`constant_addition_layer_tb`, `lascon_core_tb`, etc.) with ModelSim (`vsim`). All tests passed successfully.
+- **2026-07-10**: Completed implementation. Initial combinatorial replacement (`{~rnd_i, rnd_i}`) caused an unexpected area bloat in FPGA synthesis (LUTs increased by ~200) because it disrupted Yosys's optimization boundaries, allowing the constant addition logic to be flattened into the downstream S-box sub-optimally.
+- **2026-07-10 (Resolution)**: Applied the `(* keep *)` synthesis attribute to the combinatorial round constant wire. This preserved the logic boundary while retaining the clean code, resulting in better ASIC area (`14,578.0 GEs`, beating the baseline `14,610.5 GEs`), though Yosys FPGA mapping remained slightly higher than the hardcoded LUT baseline. All testbenches passed successfully.
 
 ---
 
