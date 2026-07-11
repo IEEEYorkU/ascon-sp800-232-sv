@@ -8,9 +8,9 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 
 | Status | Count |
 | :--- | :---: |
-| 🟢 **Completed** | 0 |
+| 🟢 **Completed** | 3 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 15 |
+| 🔵 **Pending** | 12 |
 | 🔴 **Denied** | 3 |
 
 ---
@@ -259,12 +259,12 @@ Reduce `xof_len_i` from 32 bits to 16 or 12 bits to save flip-flops and associat
 ### OPT-7: Merge the Constant Addition into the Round Counter
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-10*
 
 #### Description
 Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` with direct logic. The round constants follow the pattern `rc[i] = {~i[3:0], i[3:0]}`, so the LUT can be replaced with `{~rnd_cnt, rnd_cnt}` — a few inverters instead of a 12-entry memory.
@@ -275,8 +275,8 @@ Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` wi
 - **Area:** Small reduction — removes 12×8 LUT, replaces with 4 inverters.
 
 #### Required Changes
-- [ ] `constant_addition_layer`: Replace `AsconRcLut` array with `{~rnd_i, rnd_i}` computation
-- [ ] Verify against `constant_addition_layer_tb`
+- [x] `constant_addition_layer`: Replace `AsconRcLut` array with `{~rnd_i, rnd_i}` computation
+- [x] Verify against `constant_addition_layer_tb`
 
 #### Difficulty
 - **Execution Difficulty:** Easy
@@ -284,6 +284,7 @@ Replace the 12-entry × 8-bit round constant LUT in `constant_addition_layer` wi
 
 #### Notes & Decisions
 - **2026-07-07**: Pending. Acknowledged as a valid optimization, to be scheduled.
+- **2026-07-10**: Completed implementation and verified using automated testbenches (`constant_addition_layer_tb`, `lascon_core_tb`, etc.) with ModelSim (`vsim`). All tests passed successfully.
 
 ---
 
