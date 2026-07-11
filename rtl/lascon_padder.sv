@@ -129,7 +129,7 @@ module lascon_padder (
         next_state          = state;
         word_count_next     = word_count_reg;
         held_tuser_next     = held_tuser_reg;
-        pad_word2_data_next = '0;   //since just defining 
+        pad_word2_data_next = '0;   //since just defining        pad_word2_data_next = '0;   //since just defining
 
         // Default Pass-Through Assignments
         s_axis_tready_o = padded_tready_i;
