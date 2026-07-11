@@ -19,7 +19,7 @@ module constant_addition_layer (
 
     always_comb begin
         state_array_o = state_array_i;
-        state_array_o[2] = state_array_i[2] ^ {56'b0, ~rnd_i, rnd_i};
+        state_array_o[2][7:0] = state_array_i[2][7:0] ^ {~rnd_i, rnd_i};
     end
 
 endmodule
