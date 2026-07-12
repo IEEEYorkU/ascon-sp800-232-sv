@@ -575,12 +575,12 @@ In `lascon_padder.sv`, the `pad_word2_data_reg` is a full 64-bit register used t
 ### OPT-17: Merge Mutually Exclusive AEAD Counters
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-08*
+*Last Updated: 2026-07-12*
 
 #### Description
 In `aead_fsm.sv`, there are multiple discrete counters used for entirely different, mutually exclusive phases of the protocol: `init_cnt_r` (3-bit), `tag_init_cnt_r` (2-bit), `tag_cnt_r` (1-bit), `verify_cnt_r` (2-bit), and `post_perm_cnt_r` (2-bit). Since these phases never overlap, these counters can be merged into a single shared 3-bit counter register (e.g., `shared_cnt_r`).
@@ -591,7 +591,7 @@ In `aead_fsm.sv`, there are multiple discrete counters used for entirely differe
 - **Area:** Saves ~7 flip-flops and potentially simplifies control logic slightly.
 
 #### Required Changes
-- [ ] `aead_fsm`: Replace discrete counters with a single `shared_cnt_r`. Update state transition logic and action logic to reset and increment this shared counter in the respective states.
+- [x] `aead_fsm`: Replace discrete counters with a single `shared_cnt_r`. Update state transition logic and action logic to reset and increment this shared counter in the respective states.
 
 #### Difficulty
 - **Execution Difficulty:** Easy

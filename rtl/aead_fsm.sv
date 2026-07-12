@@ -133,13 +133,12 @@ module aead_fsm(
     state_t    state_r;
     perm_ctx_t perm_ctx_r;
 
-    // INIT Phase: tracks which word is being loaded into the core
-    logic [2:0] init_cnt_r;
+    // Shared counter replacing mutually exclusive phase counters (init, post_perm, tag_init, tag, verify)
+    logic [2:0] shared_cnt_r;
 
     // PERM phase management
     logic        perm_started_r;
     logic        post_perm_active_r;
-    logic [1:0]  post_perm_cnt_r;
 
     // AD absorption
     logic    ad_word_r;
@@ -148,15 +147,6 @@ module aead_fsm(
     // PT/CT absorption
     logic    dat_word_r;
     logic    dat_last_seen_r;
-
-    // Finalization
-    logic [1:0] tag_init_cnt_r; // 0=K->S3 XOR, 1=K->S4 XOR, 2=transition to PERM
-
-    // Tag output(enc) and tag receive (dexc)
-    logic tag_cnt_r;  // 0=S3/T_word0, 1=S4/T_word1
-
-    // Tag verification
-    logic [1:0] verify_cnt_r;  // 0=compare S3, 1=compare S4, 2=done
 
     // Stored key captured during INIT
     ascon_word_t key_r[0:1];
@@ -234,7 +224,7 @@ module aead_fsm(
     end
 
     logic pp_done;
-    assign pp_done = post_perm_active_r && (post_perm_cnt_r == pp_max);
+    assign pp_done = post_perm_active_r && (shared_cnt_r == {1'b0, pp_max});
 
     // After finishing the permutation cycle, some States require additional operations.
     // CTX_INIT_perm: XOR K into S3, S4
@@ -266,9 +256,9 @@ module aead_fsm(
 
     logic init_ack;
     assign init_ack =   (state_r == ST_INIT) &&
-                        ((init_cnt_r == 3'd0 && lascon_ready_i) ||
-                        ((init_cnt_r <= 3'd2) && padded_tvalid_i && padded_tuser_i == TUSER_KEY && padded_tready_o) ||
-                        ((init_cnt_r >= 3'd3 && init_cnt_r <= 3'd4) && padded_tvalid_i && padded_tuser_i == TUSER_NONCE && padded_tready_o));
+                        ((shared_cnt_r == 3'd0 && lascon_ready_i) ||
+                        ((shared_cnt_r <= 3'd2) && padded_tvalid_i && padded_tuser_i == TUSER_KEY && padded_tready_o) ||
+                        ((shared_cnt_r >= 3'd3 && shared_cnt_r <= 3'd4) && padded_tvalid_i && padded_tuser_i == TUSER_NONCE && padded_tready_o));
 
     logic ad_word_valid;
     assign ad_word_valid = (state_r == ST_AD && padded_tvalid_i && padded_tuser_i == TUSER_AD && padded_tready_o);
@@ -292,7 +282,7 @@ module aead_fsm(
             //==============================================================================
             // INIT: Advance after IV/K/N loading sequence completes.
             ST_INIT: begin
-                if (init_cnt_r == 3'd4 && init_ack) begin
+                if (shared_cnt_r == 3'd4 && init_ack) begin
                     next_state = ST_PERM;
                 end else begin
                     next_state = ST_INIT;
@@ -369,7 +359,7 @@ module aead_fsm(
             //==============================================================================
             // TAG_INIT: Perform pre-final-permutation key XOR steps.
             ST_TAG_INIT: begin
-                if (tag_init_cnt_r == 2'd2) begin
+                if (shared_cnt_r == 3'd2) begin
                     next_state = ST_PERM;
                 end else begin
                     next_state = ST_TAG_INIT;
@@ -379,7 +369,7 @@ module aead_fsm(
             //==============================================================================
             // ENC_TAG: Stream out computed tag words S3 and S4.
             ST_ENC_TAG: begin
-                if (m_axis_tvalid_o && m_axis_tready_i && tag_cnt_r == 1'b1) begin
+                if (m_axis_tvalid_o && m_axis_tready_i && shared_cnt_r == 3'd1) begin
                     next_state = ST_DONE;
                 end else begin
                     next_state = ST_ENC_TAG;
@@ -389,7 +379,7 @@ module aead_fsm(
             //==============================================================================
             // DEC_TAG: Receive two tag words before verification.
             ST_DEC_TAG: begin
-                if (tag_cnt_r == 1'b1 && padded_tvalid_i && padded_tready_o && padded_tuser_i == TUSER_TAG) begin
+                if (shared_cnt_r == 3'd1 && padded_tvalid_i && padded_tready_o && padded_tuser_i == TUSER_TAG) begin
                     next_state = ST_VERIFY;
                 end else begin
                     next_state = ST_DEC_TAG;
@@ -399,7 +389,7 @@ module aead_fsm(
             //==============================================================================
             // VERIFY: Compare received and computed tag words over two cycles.
             ST_VERIFY: begin
-                if (verify_cnt_r == 2'd2) next_state = ST_DONE;
+                if (shared_cnt_r == 3'd2) next_state = ST_DONE;
                 else next_state = ST_VERIFY;
             end
 
@@ -449,24 +439,24 @@ module aead_fsm(
                 cnt=3,4: S3,S4 <- N
             */
             ST_INIT: begin
-                if (init_cnt_r == 3'd0) begin
+                if (shared_cnt_r == 3'd0) begin
                     write_en_o     = lascon_ready_i;
                     in_data_sel_o  = DATA_IN_AEAD_SEL;
                     word_sel_o     = 3'd0;
                     data_o         = AEAD128_IV;
-                end else if (init_cnt_r <= 3'd2) begin
+                end else if (shared_cnt_r <= 3'd2) begin
                     padded_tready_o = 1'b1;
                     if (padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin
                         write_en_o     = 1'b1;
                         in_data_sel_o  = DATA_IN_AXI_SEL;
-                        word_sel_o     = init_cnt_r[2:0];
+                        word_sel_o     = shared_cnt_r[2:0];
                     end
                 end else begin
                     padded_tready_o = 1'b1;
                     if (padded_tvalid_i && padded_tuser_i == TUSER_NONCE) begin
                         write_en_o     = 1'b1;
                         in_data_sel_o  = DATA_IN_AXI_SEL;
-                        word_sel_o     = init_cnt_r[2:0];
+                        word_sel_o     = shared_cnt_r[2:0];
                     end
                 end
             end
@@ -510,8 +500,8 @@ module aead_fsm(
                         CTX_INIT, CTX_FINAL: begin
                             // cnt=0: XOR K into S3
                             // cnt=1: XOR K into S4
-                            word_sel_o = (post_perm_cnt_r == 2'd0) ? 3'd3 : 3'd4;
-                            data_o     = (post_perm_cnt_r == 2'd0) ? key_r[0] : key_r[1];
+                            word_sel_o = (shared_cnt_r == 3'd0) ? 3'd3 : 3'd4;
+                            data_o     = (shared_cnt_r == 3'd0) ? key_r[0] : key_r[1];
                         end
                         CTX_AD: begin
                             // Domain separation: DSEP XOR into S4
@@ -594,11 +584,11 @@ module aead_fsm(
 
             // TAG_INIT: Pre-final-permutation key XOR.
             ST_TAG_INIT: begin
-                if (tag_init_cnt_r < 2'd2) begin
+                if (shared_cnt_r < 3'd2) begin
                     write_en_o    = 1'b1;
                     in_data_sel_o = DATA_IN_XOR_AEAD_SEL;
-                    word_sel_o    = (tag_init_cnt_r == 2'd0) ? 3'd3 : 3'd4;
-                    data_o        = (tag_init_cnt_r == 2'd0) ? key_r[0] : key_r[1];
+                    word_sel_o    = (shared_cnt_r == 3'd0) ? 3'd3 : 3'd4;
+                    data_o        = (shared_cnt_r == 3'd0) ? key_r[0] : key_r[1];
                 end
             end
 
@@ -607,8 +597,8 @@ module aead_fsm(
                 m_axis_tvalid_o = 1'b1;
                 m_axis_tkeep_o  = 8'hFF;
                 m_axis_tuser_o  = TUSER_TAG;
-                m_axis_tlast_o  = (tag_cnt_r == 1'b1);
-                word_sel_o      = (tag_cnt_r == 1'b0) ? 3'd3 : 3'd4;
+                m_axis_tlast_o  = (shared_cnt_r == 3'd1);
+                word_sel_o      = (shared_cnt_r == 3'd0) ? 3'd3 : 3'd4;
                 m_axis_tdata_o  = core_data_i;
             end
 
@@ -619,7 +609,7 @@ module aead_fsm(
 
             // VERIFY: Drive word_sel to read S3 (cnt=0) then S4 (cnt=1).
             ST_VERIFY: begin
-                word_sel_o = (verify_cnt_r == 2'd0) ? 3'd3 : 3'd4;
+                word_sel_o = (shared_cnt_r == 3'd0) ? 3'd3 : 3'd4;
             end
 
             //============================================================================
@@ -640,17 +630,13 @@ module aead_fsm(
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             perm_ctx_r         <= CTX_INIT;
-            init_cnt_r         <= 3'd0;
+            shared_cnt_r       <= 3'd0;
             perm_started_r     <= 1'b0;
             post_perm_active_r <= 1'b0;
-            post_perm_cnt_r    <= 2'd0;
             ad_word_r          <= 1'b0;
             ad_last_seen_r     <= 1'b0;
             dat_word_r         <= 1'b0;
             dat_last_seen_r    <= 1'b0;
-            tag_init_cnt_r     <= 2'd0;
-            tag_cnt_r          <= 1'b0;
-            verify_cnt_r       <= 2'd0;
             key_r[0]           <= 64'd0;
             key_r[1]           <= 64'd0;
             rx_tag_r[0]        <= 64'd0;
@@ -660,45 +646,43 @@ module aead_fsm(
             case (state_r)
                 ST_IDLE: begin
                     if (start_i) begin
-                        init_cnt_r         <= 3'd0;
+                        shared_cnt_r       <= 3'd0;
                         perm_ctx_r         <= CTX_INIT;
                         ad_word_r          <= 1'b0;
                         ad_last_seen_r     <= 1'b0;
                         dat_word_r         <= 1'b0;
                         dat_last_seen_r    <= 1'b0;
-                        tag_init_cnt_r     <= 2'd0;
-                        tag_cnt_r          <= 1'b0;
-                        verify_cnt_r       <= 2'd0;
                         tag_ok_r           <= 1'b1;
                         perm_started_r     <= 1'b0;
                         post_perm_active_r <= 1'b0;
-                        post_perm_cnt_r    <= 2'd0;
                     end
                 end
 
              // INIT counter + key capture
             ST_INIT: begin
-                    case (init_cnt_r)
+                    case (shared_cnt_r)
                         3'd0: begin
-                            if (lascon_ready_i) init_cnt_r <= 3'd1;
+                            if (lascon_ready_i) shared_cnt_r <= 3'd1;
                         end
                         3'd1: begin
                             if (phs && padded_tuser_i == TUSER_KEY) begin
                                 key_r[0]   <= padded_tdata_i; // Capture K
-                                init_cnt_r <= 3'd2;
+                                shared_cnt_r <= 3'd2;
                             end
                         end
                         3'd2: begin
                             if (phs && padded_tuser_i == TUSER_KEY) begin
                                 key_r[1]   <= padded_tdata_i; // Capture K
-                                init_cnt_r <= 3'd3;
+                                shared_cnt_r <= 3'd3;
                             end
                         end
                         3'd3: begin
                             if (phs && padded_tuser_i == TUSER_NONCE)
-                                init_cnt_r <= 3'd4;
+                                shared_cnt_r <= 3'd4;
                         end
-                        3'd4: ; // Hold; next-state transitions on this beat
+                        3'd4: begin
+                            if (init_ack) shared_cnt_r <= 3'd0;
+                        end
                         default: ;
                     endcase
                 end
@@ -711,15 +695,17 @@ module aead_fsm(
                         perm_started_r <= 1'b0;
                         if (needs_post_perm) begin
                             post_perm_active_r <= 1'b1;
-                            post_perm_cnt_r    <= 2'd0;
+                            shared_cnt_r <= 3'd0;
                         end
                     end
 
                     if (post_perm_active_r) begin
-                        if (pp_done)
+                        if (pp_done) begin
                             post_perm_active_r <= 1'b0;
-                        else
-                            post_perm_cnt_r <= post_perm_cnt_r + 2'd1;
+                            shared_cnt_r <= 3'd0;
+                        end else begin
+                            shared_cnt_r <= shared_cnt_r + 3'd1;
+                        end
                     end
                 end
 
@@ -775,39 +761,42 @@ module aead_fsm(
                 end
 
                 ST_TAG_INIT: begin
-                    if (tag_init_cnt_r < 2'd2)
-                        tag_init_cnt_r <= tag_init_cnt_r + 2'd1;
+                    if (shared_cnt_r < 3'd2)
+                        shared_cnt_r <= shared_cnt_r + 3'd1;
 
-                    if (tag_init_cnt_r == 2'd1)
+                    if (shared_cnt_r == 3'd1)
                         perm_ctx_r <= CTX_FINAL;
 
-                    if (tag_init_cnt_r == 2'd2)
-                        tag_init_cnt_r <= 2'd0;
+                    if (shared_cnt_r == 3'd2)
+                        shared_cnt_r <= 3'd0;
                 end
 
                 // Tag output counter
                 ST_ENC_TAG: begin
-                    if (m_axis_tvalid_o && m_axis_tready_i)
-                        tag_cnt_r <= ~tag_cnt_r;
+                    if (m_axis_tvalid_o && m_axis_tready_i) begin
+                        if (shared_cnt_r == 3'd1) shared_cnt_r <= 3'd0;
+                        else shared_cnt_r <= shared_cnt_r + 3'd1;
+                    end
                 end
 
                 ST_DEC_TAG: begin
                     if (phs && padded_tuser_i == TUSER_TAG) begin
-                        rx_tag_r[tag_cnt_r] <= padded_tdata_i;
-                        tag_cnt_r           <= ~tag_cnt_r;
+                        rx_tag_r[shared_cnt_r[0]] <= padded_tdata_i;
+                        if (shared_cnt_r == 3'd1) shared_cnt_r <= 3'd0;
+                        else shared_cnt_r <= shared_cnt_r + 3'd1;
                     end
                 end
 
                 // Tag comparison
                 ST_VERIFY: begin
-                    case (verify_cnt_r)
-                        2'd0: begin
+                    case (shared_cnt_r)
+                        3'd0: begin
                             if (core_data_i != rx_tag_r[0]) tag_ok_r <= 1'b0;
-                            verify_cnt_r <= 2'd1;
+                            shared_cnt_r <= 3'd1;
                         end
-                        2'd1: begin
+                        3'd1: begin
                             if (core_data_i != rx_tag_r[1]) tag_ok_r <= 1'b0;
-                            verify_cnt_r <= 2'd2;
+                            shared_cnt_r <= 3'd2;
                         end
                         default: ; // cnt=2: hold until state → ST_DONE
                     endcase
