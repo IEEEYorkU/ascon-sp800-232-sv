@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   call-central-builder:
-    uses: IEEEYorkU/lascon-build-tools/.github/workflows/central-builder.yml@fix_central_builder_deps
+    uses: QREM-CORE/build-tools/.github/workflows/central-builder.yml@fix_central_builder_deps
     with:
       # Automatically targets the repository and specific commit of the PR
       rtl_repo: ${{ github.repository }}
