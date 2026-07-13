@@ -146,7 +146,6 @@ module aead_fsm(
 
     // PT/CT absorption
     logic    dat_word_r;
-    logic    dat_last_seen_r;
 
     // Stored key captured during INIT
     ascon_word_t key_r[0:1];
@@ -636,7 +635,6 @@ module aead_fsm(
             ad_word_r          <= 1'b0;
             ad_last_seen_r     <= 1'b0;
             dat_word_r         <= 1'b0;
-            dat_last_seen_r    <= 1'b0;
             key_r[0]           <= 64'd0;
             key_r[1]           <= 64'd0;
             rx_tag_r[0]        <= 64'd0;
@@ -651,7 +649,6 @@ module aead_fsm(
                         ad_word_r          <= 1'b0;
                         ad_last_seen_r     <= 1'b0;
                         dat_word_r         <= 1'b0;
-                        dat_last_seen_r    <= 1'b0;
                         tag_ok_r           <= 1'b1;
                         perm_started_r     <= 1'b0;
                         post_perm_active_r <= 1'b0;
@@ -731,7 +728,6 @@ module aead_fsm(
                 ST_PT_IN: begin
                     if (phs) begin
                         if (padded_tlast_i) begin
-                            dat_last_seen_r <= 1'b1;
                             dat_word_r      <= 1'b0;
                         end else if (dat_word_r == 1'b1) begin
                             perm_ctx_r <= CTX_DATA;
@@ -746,7 +742,6 @@ module aead_fsm(
                 ST_CT_IN: begin
                     if (phs) begin
                         if (padded_tlast_i) begin
-                            dat_last_seen_r <= 1'b1;
                             dat_word_r      <= 1'b0;
                             if (padded_tkeep_raw_i == 8'hFF && dat_word_r == 1'b1) begin
                                 perm_ctx_r <= CTX_CT_PAD;
