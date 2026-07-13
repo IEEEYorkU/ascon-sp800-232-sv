@@ -808,6 +808,11 @@ module aead_fsm(
                     endcase
                 end
 
+                ST_CT_PAD_0,
+                ST_DONE: begin
+                    // No action needed for these states in this block
+                end
+
                 default: ;
             endcase
             end
