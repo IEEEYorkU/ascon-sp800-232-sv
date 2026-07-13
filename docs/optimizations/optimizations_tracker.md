@@ -8,9 +8,9 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 
 | Status | Count |
 | :--- | :---: |
-| 🟢 **Completed** | 5 |
+| 🟢 **Completed** | 7 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 10 |
+| 🔵 **Pending** | 8 |
 | 🔴 **Denied** | 3 |
 
 ---
