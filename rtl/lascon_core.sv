@@ -128,9 +128,10 @@ module lascon_core (
     always_comb begin
         ready_o = 1'd0;
 
-        unique case (state)
+        case (state)
             STATE_IDLE: ready_o = 1'd1;
             STATE_PERM: ready_o = 1'd0;
+            default: ready_o = 1'd0;
         endcase
     end
 
