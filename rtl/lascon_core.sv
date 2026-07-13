@@ -62,7 +62,7 @@ module lascon_core (
         STATE_IDLE,
         STATE_PERM
     } state_t;
-    (* fsm_encoding = "none" *) state_t state, next_state;
+    state_t state, next_state;
 
     rnd_t rnd_cnt;
     ascon_state_t state_array;
