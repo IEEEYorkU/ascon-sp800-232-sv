@@ -515,6 +515,7 @@ module aead_fsm(
                             word_sel_o = 3'd0;
                             data_o     = 64'h80000000_00000000;
                         end
+                        CTX_DATA: ; // No post-permutation operations required
                         default: ;
                     endcase
                 end
