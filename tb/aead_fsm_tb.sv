@@ -104,7 +104,7 @@ module aead_fsm_tb;
     // Task to wait for a signal condition with a strict timeout
     task automatic wait_with_timeout(ref logic sig, input logic val, input string name);
         int timeout_cnt = 0;
-        const int MAX_WAIT = 100;
+        int MAX_WAIT = 100;
         while (sig !== val) begin
             @(negedge clk);
             timeout_cnt++;

@@ -216,10 +216,12 @@ module aead_fsm(
     logic [1:0] pp_max;
     always_comb begin
         case (perm_ctx_r)
-            CTX_INIT:  pp_max = 2'd1;
-            CTX_AD:    pp_max = 2'd0;
-            CTX_FINAL: pp_max = 2'd1;
-            default:   pp_max = 2'd0;
+            CTX_INIT:   pp_max = 2'd1;
+            CTX_AD:     pp_max = 2'd0;
+            CTX_DATA:   pp_max = 2'd0;
+            CTX_CT_PAD: pp_max = 2'd0;
+            CTX_FINAL:  pp_max = 2'd1;
+            default:    pp_max = 2'd0;
         endcase
     end
 
@@ -333,7 +335,7 @@ module aead_fsm(
             //==============================================================================
             // CT_IN: Decrypt payload; final word goes to finalization setup.
             ST_CT_IN: begin
-                if (padded_tvalid_i && m_axis_tready_i) begin
+                if (ct_word_valid) begin
                     if (padded_tlast_i) begin
                         if (padded_tkeep_raw_i == 8'hFF) begin
                             // Full word, padding spills into next word/block
