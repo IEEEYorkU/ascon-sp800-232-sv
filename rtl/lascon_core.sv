@@ -125,14 +125,7 @@ module lascon_core (
 
     // FSM Control Process 3: Action Decoder (Combinational)
     // ----------------------------------------------------------
-    always_comb begin
-        ready_o = 1'd0;
-
-        case(state)
-            STATE_IDLE: ready_o = 1'd1;
-            default: ready_o = 1'd0;
-        endcase
-    end
+    assign ready_o = (state == STATE_IDLE);
 
     // FSM Control Process 4: Action Logic (Sequential)
     // ----------------------------------------------------------

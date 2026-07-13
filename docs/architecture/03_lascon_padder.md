@@ -15,7 +15,7 @@ In this accelerator's "Decoupled Data/Control" architecture, the padder sits dir
 * **Handshake Sidebands:** The padder provides two auxiliary signals to the downstream FSMs:
   - `padded_tkeep_raw_o`: An unmodified copy of the original stream `s_axis_tkeep_i` used by the FSM to track precise payload boundaries (specifically needed for decryption state masking and masking raw AXI `m_axis_tkeep_o` output).
   - `padded_is_padding_o`: Driven high when the padder is generating and emitting artificial carry blocks, instructing the FSM to suppress AXI stream master output valid flags (`m_axis_tvalid_o = 1'b0`) during those beats.
-* **Clean Datapath:** By the time data leaves the padder on the `padded_tdata_o` bus, it is mathematically complete and rate-aligned. The downstream FSMs never need to inspect `padded_tkeep_o` during standard absorption phases; they simply XOR the full 64-bit payload into the core.
+* **Clean Datapath:** By the time data leaves the padder on the `padded_tdata_o` bus, it is mathematically complete and rate-aligned. The downstream FSMs never need to inspect `padded_tkeep_raw_o` during standard absorption phases; they simply XOR the full 64-bit payload into the core.
 
 ---
 
@@ -27,7 +27,7 @@ The external AXI4-Stream bus provides data in Little-Endian format, whereas the 
 
 #### B. The Ascon Padding Rule & Carry Blocks (`TUSER_AD`, `TUSER_PT`, `TUSER_MSG`, `TUSER_Z`)
 When processing variable-length data groups (Associated Data, Plaintext, Hash Messages, and Customization Strings), the padder monitors the stream for the boundary marker (`s_axis_tlast_i == 1`).
-* **Partial Final Word (`s_axis_tkeep_i != 8'hFF`):** The padder evaluates the byte-enables to find the last valid byte, appends the mandatory Ascon padding sequence (a single `1` bit followed by `0`s to fill the 64-bit word), and forces the output `padded_tkeep_o = 8'hFF`.
+* **Partial Final Word (`s_axis_tkeep_i != 8'hFF`):** The padder evaluates the byte-enables to find the last valid byte, appends the mandatory Ascon padding sequence (a single `1` bit followed by `0`s to fill the 64-bit word), and forces the output `padded_tkeep_raw_o = 8'hFF`.
 * **Full Final Word (`s_axis_tkeep_i == 8'hFF`):** The final word contains only message data. Since the `10...0` padding cannot fit in the word, the padder delays the downstream end-of-packet marker (`padded_tlast_o = 1'b0`) and generates a subsequent "spillover" carry block containing `64'h8000_0000_0000_0000` to hold the padding.
 
 #### C. Rate Alignment & AEAD 128-bit Boundaries

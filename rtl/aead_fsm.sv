@@ -50,6 +50,8 @@
  * Ref: NIST SP 800-232, Section 4
  */
 
+`timescale 1ns / 1ps
+
 import lascon_pkg::*;
 
 module aead_fsm(
@@ -78,7 +80,6 @@ module aead_fsm(
 
     // Padded AXI STREAM from padder unit
     input ascon_word_t          padded_tdata_i,  // Pre-processed
-    input logic [7:0]           padded_tkeep_i,  // Pass - through for CT
     input logic [7:0]           padded_tkeep_raw_i, // Raw pass-through for exact Payload tracking
     input axi_tuser_t           padded_tuser_i,  // User type
     input logic                 padded_tlast_i,  // last word in the message
@@ -146,7 +147,6 @@ module aead_fsm(
 
     // PT/CT absorption
     logic    dat_word_r;
-    logic    dat_last_seen_r;
 
     // Stored key captured during INIT
     ascon_word_t key_r[0:1];
@@ -216,10 +216,12 @@ module aead_fsm(
     logic [1:0] pp_max;
     always_comb begin
         case (perm_ctx_r)
-            CTX_INIT:  pp_max = 2'd1;
-            CTX_AD:    pp_max = 2'd0;
-            CTX_FINAL: pp_max = 2'd1;
-            default:   pp_max = 2'd0;
+            CTX_INIT:   pp_max = 2'd1;
+            CTX_AD:     pp_max = 2'd0;
+            CTX_DATA:   pp_max = 2'd0;
+            CTX_CT_PAD: pp_max = 2'd0;
+            CTX_FINAL:  pp_max = 2'd1;
+            default:    pp_max = 2'd0;
         endcase
     end
 
@@ -333,7 +335,7 @@ module aead_fsm(
             //==============================================================================
             // CT_IN: Decrypt payload; final word goes to finalization setup.
             ST_CT_IN: begin
-                if (padded_tvalid_i && m_axis_tready_i) begin
+                if (ct_word_valid) begin
                     if (padded_tlast_i) begin
                         if (padded_tkeep_raw_i == 8'hFF) begin
                             // Full word, padding spills into next word/block
@@ -513,6 +515,7 @@ module aead_fsm(
                             word_sel_o = 3'd0;
                             data_o     = 64'h80000000_00000000;
                         end
+                        CTX_DATA: ; // No post-permutation operations required
                         default: ;
                     endcase
                 end
@@ -582,6 +585,14 @@ module aead_fsm(
                 end
             end
 
+            // CT_PAD_0: Inject 0x80 into S1 when CT ends on word 0 boundary.
+            ST_CT_PAD_0: begin
+                write_en_o    = 1'b1;
+                in_data_sel_o = DATA_IN_XOR_AEAD_SEL;
+                word_sel_o    = 3'd1;
+                data_o        = 64'h80000000_00000000;
+            end
+
             // TAG_INIT: Pre-final-permutation key XOR.
             ST_TAG_INIT: begin
                 if (shared_cnt_r < 3'd2) begin
@@ -636,7 +647,6 @@ module aead_fsm(
             ad_word_r          <= 1'b0;
             ad_last_seen_r     <= 1'b0;
             dat_word_r         <= 1'b0;
-            dat_last_seen_r    <= 1'b0;
             key_r[0]           <= 64'd0;
             key_r[1]           <= 64'd0;
             rx_tag_r[0]        <= 64'd0;
@@ -651,7 +661,6 @@ module aead_fsm(
                         ad_word_r          <= 1'b0;
                         ad_last_seen_r     <= 1'b0;
                         dat_word_r         <= 1'b0;
-                        dat_last_seen_r    <= 1'b0;
                         tag_ok_r           <= 1'b1;
                         perm_started_r     <= 1'b0;
                         post_perm_active_r <= 1'b0;
@@ -731,7 +740,6 @@ module aead_fsm(
                 ST_PT_IN: begin
                     if (phs) begin
                         if (padded_tlast_i) begin
-                            dat_last_seen_r <= 1'b1;
                             dat_word_r      <= 1'b0;
                         end else if (dat_word_r == 1'b1) begin
                             perm_ctx_r <= CTX_DATA;
@@ -746,7 +754,6 @@ module aead_fsm(
                 ST_CT_IN: begin
                     if (phs) begin
                         if (padded_tlast_i) begin
-                            dat_last_seen_r <= 1'b1;
                             dat_word_r      <= 1'b0;
                             if (padded_tkeep_raw_i == 8'hFF && dat_word_r == 1'b1) begin
                                 perm_ctx_r <= CTX_CT_PAD;
@@ -800,6 +807,11 @@ module aead_fsm(
                         end
                         default: ; // cnt=2: hold until state → ST_DONE
                     endcase
+                end
+
+                ST_CT_PAD_0,
+                ST_DONE: begin
+                    // No action needed for these states in this block
                 end
 
                 default: ;
