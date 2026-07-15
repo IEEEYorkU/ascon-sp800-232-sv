@@ -149,7 +149,7 @@ module aead_fsm(
     logic    dat_word_r;
 
     // Shared key (during enc/dec init) and received tag (during dec verify)
-    ascon_word_t shared_key_tag_r[0:1];
+    ascon_word_t shared_key_tag_r[2];
 
     // tag match result
     logic tag_ok_r;
