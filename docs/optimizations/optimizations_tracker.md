@@ -318,7 +318,7 @@ In `aead_fsm`, the 128-bit key is stored in `key_r[0:1]` (128 FFs) and the recei
 
 #### Notes & Decisions
 - **2026-07-07**: Under consideration. Needs careful review of timing between key usage and tag reception.
-- **2026-07-14**: Implemented and verified via testbenches. The shared register `shared_key_tag_r` safely reuses flip-flops, as the post-permutation XOR completes before any tag bytes are received during decryption.
+- **2026-07-14**: Implemented and verified via testbenches. The shared register `shared_key_tag_r` safely reuses flip-flops, as the post-permutation XOR completes before any tag bytes are received during decryption. Synthesis results show a direct saving of **128 FFs** and **59 LUTs** on FPGA, and **654 GEs (128 FFs)** on ASIC (CMOS2) with zero timing penalty (critical path remained at 9 logic levels).
 
 ---
 
