@@ -311,14 +311,14 @@ module lascon_top (
     );
     // Select Data Input
     always_comb begin
-        core_data_i = 'x; // Pre-assign to avoid latches while keeping synthesis optimizations
-        unique case(core_in_data_sel)
+        case(core_in_data_sel)
             DATA_IN_AEAD_SEL     : core_data_i = aead_data_o;
             DATA_IN_HASH_SEL     : core_data_i = hash_data_o;
             DATA_IN_AXI_SEL      : core_data_i = padded_tdata;
             DATA_IN_XOR_AXI_SEL  : core_data_i = core_data_o ^ padded_tdata;
             DATA_IN_XOR_AEAD_SEL : core_data_i = core_data_o ^ aead_data_o;
             DATA_IN_XOR_HASH_SEL : core_data_i = core_data_o ^ hash_data_o;
+            default              : core_data_i = core_data_o ^ hash_data_o;
         endcase
     end
 
