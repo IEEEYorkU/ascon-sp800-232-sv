@@ -318,7 +318,7 @@ module lascon_top (
             DATA_IN_XOR_AXI_SEL  : core_data_i = core_data_o ^ padded_tdata;
             DATA_IN_XOR_AEAD_SEL : core_data_i = core_data_o ^ aead_data_o;
             DATA_IN_XOR_HASH_SEL : core_data_i = core_data_o ^ hash_data_o;
-            default              : core_data_i = core_data_o ^ hash_data_o;
+            default              : core_data_i = aead_data_o;
         endcase
     end
 
