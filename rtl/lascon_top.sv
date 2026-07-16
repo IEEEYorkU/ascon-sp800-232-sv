@@ -112,6 +112,7 @@ module lascon_top (
     logic [2:0]     aead_word_sel, hash_word_sel;
     logic           aead_start_perm, hash_start_perm;
     logic           aead_round_config, hash_round_config;
+    logic           hash_iv_en;
     iv_sel_t        hash_iv_sel;
     ascon_word_t    aead_data_o;
     data_sel_t      aead_in_data_sel, hash_in_data_sel;
@@ -283,6 +284,7 @@ module lascon_top (
         .start_perm_o           (hash_start_perm),
         .round_config_o         (hash_round_config),
         .word_sel_o             (hash_word_sel),
+        .iv_en_o                (hash_iv_en),
         .iv_sel_o               (hash_iv_sel),
         .write_en_o             (hash_write_en),
         .core_in_data_sel_o     (hash_in_data_sel),
@@ -320,13 +322,16 @@ module lascon_top (
 
     ascon_word_t iv_const;
     always_comb begin
-        case(core_iv_sel_i)
+        case(hash_iv_sel)
             IV_HASH256: iv_const = HASH256_IV;
             IV_XOF:     iv_const = XOF128_IV;
             IV_CXOF:    iv_const = CXOF128_IV;
             default:    iv_const = HASH256_IV;
         endcase
     end
+
+    logic [63:0] hash_data_top;
+    assign hash_data_top = hash_iv_en ? iv_const : 64'd0;
 
     // Select Data Input
     always_comb begin
@@ -335,8 +340,7 @@ module lascon_top (
             DATA_IN_AXI_SEL      : core_data_i = padded_tdata;
             DATA_IN_XOR_AXI_SEL  : core_data_i = core_data_o ^ padded_tdata;
             DATA_IN_XOR_AEAD_SEL : core_data_i = core_data_o ^ aead_data_o;
-            DATA_IN_ZERO_SEL     : core_data_i = 64'd0;
-            DATA_IN_IV_SEL       : core_data_i = iv_const;
+            DATA_IN_HASH_SEL     : core_data_i = hash_data_top;
             default              : core_data_i = 64'd0;
         endcase
     end

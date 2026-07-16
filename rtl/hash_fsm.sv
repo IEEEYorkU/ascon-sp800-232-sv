@@ -68,6 +68,7 @@ module hash_fsm (
     output logic           start_perm_o,
     output logic           round_config_o, // e.g., 0 for p^12, 1 for p^8
     output logic [2:0]     word_sel_o,
+    output logic           iv_en_o,
     output iv_sel_t        iv_sel_o,
     output logic           write_en_o,
     output data_sel_t      core_in_data_sel_o,
@@ -234,8 +235,9 @@ module hash_fsm (
         round_config_o     = 1'b1; // 1 = p^12 for Ascon-Hash/XOF
         write_en_o         = 1'b0;
         word_sel_o         = word_cnt[2:0];
+        iv_en_o            = 1'b0;
         iv_sel_o           = IV_HASH256;
-        core_in_data_sel_o = DATA_IN_ZERO_SEL; // Default to zero data
+        core_in_data_sel_o = DATA_IN_HASH_SEL; // Default to zero/hash data
         padded_tready_o    = 1'b0;
         m_axis_tvalid_o    = 1'b0;
         m_axis_tlast_o     = 1'b0;
@@ -251,7 +253,8 @@ module hash_fsm (
                 // Initialize Core S0 with IV
                 if (word_cnt == 3'd0) begin
                     write_en_o         = 1'b1;
-                    core_in_data_sel_o = DATA_IN_IV_SEL;
+                    iv_en_o            = 1'b1;
+                    core_in_data_sel_o = DATA_IN_HASH_SEL;
                     unique case (mode_i)
                         MODE_XOF:     iv_sel_o = IV_XOF;
                         MODE_CXOF:    iv_sel_o = IV_CXOF;
@@ -261,7 +264,8 @@ module hash_fsm (
                 // Initialize Core S1/S2/S3/S4 with 0
                 end else begin
                     write_en_o = 1'b1;
-                    core_in_data_sel_o = DATA_IN_ZERO_SEL;
+                    iv_en_o    = 1'b0;
+                    core_in_data_sel_o = DATA_IN_HASH_SEL;
                 end
             end
 
