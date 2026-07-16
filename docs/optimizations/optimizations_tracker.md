@@ -10,8 +10,8 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 | :--- | :---: |
 | 🟢 **Completed** | 8 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 7 |
-| 🔴 **Denied** | 3 |
+| 🔵 **Pending** | 6 |
+| 🔴 **Denied** | 4 |
 
 ---
 
@@ -513,13 +513,16 @@ Yosys often infers bulky `$DFFRAM` or block RAMs for 2D arrays like `ascon_state
 
 ### OPT-15: Move IV Generation to Core (Control)
 
+> [!WARNING]
+> **Denied (2026-07-15):** Removing the constant 64-bit data bus from the FSM in RTL actually caused an area increase in ASIC synthesis. Synthesizers naturally optimize constant bits by tying them to Ground, costing zero area. Replacing these with encoded mux selectors created additional decode logic, increasing cell count.
+
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
 - [ ] **Completed**
-- [ ] **Denied**
+- [x] **Denied**
 
-*Last Updated: 2026-07-08*
+*Last Updated: 2026-07-15*
 
 #### Description
 Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`, etc.) through the top-level muxing to the Core. Hardcoding these constants inside `lascon_core.sv` and triggering them via a 2-bit init signal will save significant routing area and top-level muxes.
@@ -540,6 +543,7 @@ Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`,
 
 #### Notes & Decisions
 - **2026-07-08**: Identified as an area optimization strategy. Recommended as one of the top 2 best ROI. Marked as pending.
+- **2026-07-15**: Denied/Abandoned. Initial implementation in `lascon_core.sv` caused an area regression (+134 LUTs) by breaking core datapath symmetry. A subsequent top-level IV muxing rescue attempt saved LUTs on FPGA (-44 LUTs) but still incurred a minor area penalty (+19.5 GEs / +28 cells) on ASIC. This is because the synthesizer already perfectly optimizes the 64-bit constant bus by tying 55 static zero bits to Ground. Re-encoding this as multiplexer selectors forced the tool to insert standard cell decoders, adding net area. Abandoned in favor of the original optimal baseline.
 
 ---
 
