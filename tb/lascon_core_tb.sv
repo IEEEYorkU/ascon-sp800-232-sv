@@ -27,8 +27,6 @@ module lascon_core_tb;
     // Data I/O Control
     ascon_word_t    data_i;
     logic           write_en_i;
-    logic           iv_en_i;
-    iv_sel_t        iv_sel_i;
 
     // Data Output (according to word_sel_i)
     ascon_word_t    data_o;
@@ -61,8 +59,6 @@ module lascon_core_tb;
         .word_sel_i(word_sel_i),
         .data_i(data_i),
         .write_en_i(write_en_i),
-        .iv_en_i(iv_en_i),
-        .iv_sel_i(iv_sel_i),
         .data_o(data_o),
         .ready_o(ready_o)
     );
@@ -136,37 +132,10 @@ module lascon_core_tb;
         round_config_i = 0;
         word_sel_i = 3'd0;
         write_en_i = 0;
-        iv_en_i = 0;
-        iv_sel_i = IV_AEAD128;
         data_i = 320'd0;
         error_count = 0;
 
         #10 rst = 0;
-
-        // ----------------------------
-        // Test IV Loading
-        // ----------------------------
-        $display("Testing IV Loading...");
-        @(negedge clk);
-        iv_en_i = 1; iv_sel_i = IV_AEAD128;
-        @(negedge clk);
-        iv_en_i = 0; word_sel_i = 0;
-        @(posedge clk);
-        if (data_o != 64'h00001000808c0001) begin
-            error_count++;
-            $display("[ERROR] AEAD128 IV Load Failed! Expected: %x Got: %x", 64'h00001000808c0001, data_o);
-        end else $write(".");
-
-        @(negedge clk);
-        iv_en_i = 1; iv_sel_i = IV_HASH256;
-        @(negedge clk);
-        iv_en_i = 0; word_sel_i = 0;
-        @(posedge clk);
-        if (data_o != 64'h0000080100cc0002) begin
-            error_count++;
-            $display("[ERROR] HASH256 IV Load Failed! Expected: %x Got: %x", 64'h0000080100cc0002, data_o);
-        end else $write(".");
-        $display("\n");
 
         // Exhaustive Tests
         $display("Exhaustive Random Input Test...");

@@ -75,7 +75,8 @@ package lascon_pkg;
         DATA_IN_AEAD_SEL       = 3'b001,
         DATA_IN_XOR_AXI_SEL    = 3'b010,
         DATA_IN_XOR_AEAD_SEL   = 3'b011,
-        DATA_IN_ZERO_SEL       = 3'b100
+        DATA_IN_ZERO_SEL       = 3'b100,
+        DATA_IN_IV_SEL         = 3'b101
     } data_sel_t;
 
     // Reverses byte order of a 64-bit word

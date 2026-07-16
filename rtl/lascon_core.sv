@@ -51,9 +51,6 @@ module lascon_core (
     // Data I/O Control
     input   ascon_word_t    data_i,
     input   logic           write_en_i,
-    input   logic           iv_en_i,
-    input   iv_sel_t        iv_sel_i,
-
 
     // Data Output (according to word_sel_i)
     output  ascon_word_t    data_o,
@@ -68,12 +65,6 @@ module lascon_core (
         STATE_PERM
     } state_t;
     state_t state, next_state;
-
-    // IV Constants
-    localparam ascon_word_t AEAD128_IV   = 64'h00001000808c0001;
-    localparam ascon_word_t HASH256_IV   = 64'h0000080100cc0002;
-    localparam ascon_word_t XOF128_IV    = 64'h0000080000cc0003;
-    localparam ascon_word_t CXOF128_IV   = 64'h0000080000cc0004;
 
     rnd_t rnd_cnt;
     ascon_state_t state_array;
@@ -144,15 +135,7 @@ module lascon_core (
         unique case (state)
             STATE_IDLE: begin
                 if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
-                if (iv_en_i) begin
-                    case (iv_sel_i)
-                        IV_AEAD128: state_array[0] <= AEAD128_IV;
-                        IV_HASH256: state_array[0] <= HASH256_IV;
-                        IV_XOF:     state_array[0] <= XOF128_IV;
-                        IV_CXOF:    state_array[0] <= CXOF128_IV;
-                        default:    state_array[0] <= 64'd0;
-                    endcase
-                end else if (write_en_i) begin
+                if (write_en_i) begin
                     state_array[word_sel_i] <= data_i;
                 end
             end
