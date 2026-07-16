@@ -514,25 +514,26 @@ Yosys often infers bulky `$DFFRAM` or block RAMs for 2D arrays like `ascon_state
 ### OPT-15: Move IV Generation to Core (Control)
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
-- [ ] **Completed**
+- [x] **Completed**
 - [ ] **Denied**
 
 *Last Updated: 2026-07-08*
 
 #### Description
-Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`, etc.) through the top-level muxing to the Core. Hardcoding these constants inside `lascon_core.sv` and triggering them via a 2-bit init signal will save significant routing area and top-level muxes.
+Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`, etc.) and `aead_fsm.sv` routes the `AEAD128_IV` constant through the top-level muxing to the Core. Hardcoding these constants inside `lascon_core.sv` and triggering them via an init selection signal will save significant routing area and top-level muxes. This will allow us to completely remove the `data_o` data bus from `hash_fsm.sv`. (Note: `aead_fsm.sv` will retain its `data_o` bus for key injection and dynamic ciphertext masking).
 
 #### PPA (Performance, Power, Area) Impact
 - **Performance:** None.
 - **Power:** Minor improvement due to less toggling on wide buses.
-- **Area:** Medium reduction in routing area and multiplexers at the top level.
+- **Area:** Medium reduction in routing area and multiplexers at the top level, and removal of the 64-bit `data_o` port on `hash_fsm.sv`.
 
 #### Required Changes
-- [ ] `lascon_core`: Move IV constants inside this module and add control signals to select them during initialization.
-- [ ] `hash_fsm`: Update to output the new control signals instead of 64-bit IV constants.
-- [ ] `lascon_top`: Update connections between FSM and Core.
+- [x] `lascon_core`: Move IV constants (both AEAD and Hash variants) inside this module and add control signals to select them during initialization.
+- [x] `hash_fsm`: Completely remove the `data_o` bus. Update to output the new control signals instead of 64-bit IV constants.
+- [x] `aead_fsm`: Update to output the new control signals instead of the 64-bit `AEAD128_IV` constant (Keep `data_o` for other datapath logic).
+- [x] `lascon_top`: Update connections between the FSMs and the Core, removing the `hash_data_o` route.
 
 #### Difficulty
 - **Execution Difficulty:** Low
@@ -540,6 +541,7 @@ Currently, `hash_fsm.sv` routes full 64-bit IV constants (`ASCON_HASH_IV_WORD0`,
 
 #### Notes & Decisions
 - **2026-07-08**: Identified as an area optimization strategy. Recommended as one of the top 2 best ROI. Marked as pending.
+- **2026-07-15**: Completed implementation. IV constants successfully moved to `lascon_core`, `hash_fsm` no longer uses `data_o`, and `aead_fsm` delegates IV loading natively. `lascon_top` routing simplified. Verified via full test suite.
 
 ---
 

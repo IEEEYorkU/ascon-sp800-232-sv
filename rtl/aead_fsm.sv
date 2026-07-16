@@ -22,6 +22,9 @@
  *   ST_VERIFY, ST_DONE) built as a split-control FSM with dedicated blocks
  *   for state register, next-state logic, sequential side registers/action
  *   latching, and output decoding.
+ * - Initialization: Delegates IV loading natively to the ascon_core via
+ *   iv_en_o and iv_sel_o control signals, while continuing to route dynamic 
+ *   Key and Nonce material through the standard data_o datapath.
  * - Shared Permutation State: ST_PERM is reused across all four permutation
  *   phases (initialization, associated data, processing ciphertext/plaintext, finalization). A
  *   perm_ctx_r register records which phase triggered the permutation and
@@ -74,6 +77,8 @@ module aead_fsm(
     output logic                start_perm_o,
     output logic                round_config_o,
     output logic     [2:0]      word_sel_o,  // Target state word address S0,S1,.., S4
+    output logic                iv_en_o,
+    output iv_sel_t             iv_sel_o,
     output ascon_word_t         data_o,
     output logic                write_en_o,
     output data_sel_t           in_data_sel_o,  // Mux select for core data_i source
@@ -98,7 +103,6 @@ module aead_fsm(
 );
 
     // Ascon-128a Parameters (r=128, a=12, b=8)
-    localparam ascon_word_t AEAD128_IV = 64'h00001000808c0001; // IV <-  0x00001000808c0001
     localparam ascon_word_t DSEP = 64'h0000000000000001; // DSEP <- 0x0000000000000001
     localparam logic ROUND_PA = 1'b1;  // 12 round permutation
     localparam logic ROUND_PB = 1'b0;  // 8 round permutation
@@ -414,6 +418,8 @@ module aead_fsm(
         start_perm_o       = 1'b0;
         round_config_o     = ROUND_PB;
         word_sel_o         = 3'd0;
+        iv_en_o            = 1'b0;
+        iv_sel_o           = IV_AEAD128;
         data_o             = 64'd0;
         write_en_o         = 1'b0;
         in_data_sel_o      = DATA_IN_AXI_SEL;
@@ -433,16 +439,14 @@ module aead_fsm(
             //==============================================================================
             /*
                 INIT state:
-                cnt=0: S0 <- IV <- 0x00001000808c0001
+                cnt=0: S0 <- IV <- 0x00001000808c0001 (via iv_en_o)
                 cnt=1,2: S1,S2 <- K
                 cnt=3,4: S3,S4 <- N
             */
             ST_INIT: begin
                 if (shared_cnt_r == 3'd0) begin
-                    write_en_o     = lascon_ready_i;
-                    in_data_sel_o  = DATA_IN_AEAD_SEL;
-                    word_sel_o     = 3'd0;
-                    data_o         = AEAD128_IV;
+                    iv_en_o        = 1'b1;
+                    iv_sel_o       = IV_AEAD128;
                 end else if (shared_cnt_r <= 3'd2) begin
                     padded_tready_o = 1'b1;
                     if (padded_tvalid_i && padded_tuser_i == TUSER_KEY) begin

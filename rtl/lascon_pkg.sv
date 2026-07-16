@@ -60,15 +60,22 @@ package lascon_pkg;
         MODE_CXOF       = 3'b100
     } lascon_mode_t;
 
+    // --- IV Select Enum ---
+    typedef enum logic [1:0] {
+        IV_AEAD128      = 2'b00,
+        IV_HASH256      = 2'b01,
+        IV_XOF          = 2'b10,
+        IV_CXOF         = 2'b11
+    } iv_sel_t;
+
     // --- Lascon Core Data-In Select Enum ---
     // Selects what data is being fed into the lascon core
     typedef enum logic [2:0] {
         DATA_IN_AXI_SEL        = 3'b000,
         DATA_IN_AEAD_SEL       = 3'b001,
-        DATA_IN_HASH_SEL       = 3'b010,
-        DATA_IN_XOR_AXI_SEL    = 3'b011,
-        DATA_IN_XOR_AEAD_SEL   = 3'b100,
-        DATA_IN_XOR_HASH_SEL   = 3'b101
+        DATA_IN_XOR_AXI_SEL    = 3'b010,
+        DATA_IN_XOR_AEAD_SEL   = 3'b011,
+        DATA_IN_ZERO_SEL       = 3'b100
     } data_sel_t;
 
     // Reverses byte order of a 64-bit word

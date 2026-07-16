@@ -24,8 +24,8 @@
  * -----------------------------------------------------------------------------
  * STEP 1: Initialization
  * Set `mode_i` and `xof_len_i`, then pulse `start_i`.
- * The FSM automatically loads the correct 320-bit pre-computed IV
- * into the Ascon Core, permutes it, and enters the Absorb phase.
+ * The FSM signals the core to load the correct 320-bit pre-computed IV
+ * natively via `iv_en_o` and `iv_sel_o`, permutes it, and enters the Absorb phase.
  *
  * STEP 2: Customization (MODE_CXOF Only)
  * Stream the customization string (Z) tagged with `TUSER_Z`.
@@ -68,7 +68,8 @@ module hash_fsm (
     output logic           start_perm_o,
     output logic           round_config_o, // e.g., 0 for p^12, 1 for p^8
     output logic [2:0]     word_sel_o,
-    output ascon_word_t    data_o,         // Used to write the pre-computed Hash IVs
+    output logic           iv_en_o,
+    output iv_sel_t        iv_sel_o,
     output logic           write_en_o,
     output data_sel_t      core_in_data_sel_o,
 
@@ -119,10 +120,6 @@ module hash_fsm (
 
     // Calculate how many 64-bit words to squeeze based on xof_len_i (in bytes)
     assign target_squeeze_words = (mode_i == MODE_HASH256) ? 32'd4 : ((xof_len_i + 32'd7) >> 3);
-
-    localparam ascon_word_t ASCON_HASH_IV_WORD0  = 64'h0000080100cc0002;
-    localparam ascon_word_t ASCON_XOF_IV_WORD0   = 64'h0000080000cc0003;
-    localparam ascon_word_t ASCON_CXOF_IV_WORD0  = 64'h0000080000cc0004;
 
     // =======================================================================
     // STATE REGISTER UPDATES
@@ -238,13 +235,14 @@ module hash_fsm (
         round_config_o     = 1'b1; // 1 = p^12 for Ascon-Hash/XOF
         write_en_o         = 1'b0;
         word_sel_o         = word_cnt[2:0];
-        core_in_data_sel_o = DATA_IN_HASH_SEL; // Default to FSM data
+        iv_en_o            = 1'b0;
+        iv_sel_o           = IV_HASH256;
+        core_in_data_sel_o = DATA_IN_ZERO_SEL; // Default to zero data
         padded_tready_o    = 1'b0;
         m_axis_tvalid_o    = 1'b0;
         m_axis_tlast_o     = 1'b0;
         m_axis_tkeep_o     = 8'hFF;
         m_axis_tuser_o     = TUSER_DIGEST;
-        data_o             = 64'b0;
 
         unique case (state)
             STATE_IDLE: begin
@@ -252,19 +250,19 @@ module hash_fsm (
             end
 
             STATE_INIT: begin
-                write_en_o = 1'b1;
                 // Initialize Core S0 with IV
                 if (word_cnt == 3'd0) begin
+                    iv_en_o = 1'b1;
                     unique case (mode_i)
-                        MODE_XOF:     data_o = ASCON_XOF_IV_WORD0;
-                        MODE_CXOF:    data_o = ASCON_CXOF_IV_WORD0;
-                        MODE_HASH256: data_o = ASCON_HASH_IV_WORD0;
-                        MODE_AEAD_ENC,
-                        MODE_AEAD_DEC: data_o = 64'b0;
+                        MODE_XOF:     iv_sel_o = IV_XOF;
+                        MODE_CXOF:    iv_sel_o = IV_CXOF;
+                        MODE_HASH256: iv_sel_o = IV_HASH256;
+                        default:      iv_sel_o = IV_HASH256;
                     endcase
                 // Initialize Core S1/S2/S3/S4 with 0
                 end else begin
-                    data_o = 64'b0;
+                    write_en_o = 1'b1;
+                    core_in_data_sel_o = DATA_IN_ZERO_SEL;
                 end
             end
 

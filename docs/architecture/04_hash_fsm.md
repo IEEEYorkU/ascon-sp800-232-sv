@@ -21,7 +21,7 @@ This decoupled philosophy manifests in several key ways:
 The FSM executes the hashing algorithms through three distinct phases:
 
 #### A. Initialization
-Upon receiving a `start_i` pulse, the FSM assesses the `mode_i` configuration. It drives the pre-computed 320-bit Initialization Vector (IV) specific to the chosen algorithm (Hash, XOF, or CXOF) onto the `data_o` bus sequentially. It writes this into the core (`S0`...`S4`) and triggers the initial 12-round permutation (`p^12`).
+Upon receiving a `start_i` pulse, the FSM assesses the `mode_i` configuration. It asserts `iv_en_o` and the mode-specific `iv_sel_o` to signal the core to load the pre-computed 320-bit Initialization Vector (IV) specific to the chosen algorithm (Hash, XOF, or CXOF). It also triggers the initial 12-round permutation (`p^12`).
 
 #### B. Absorbing Phase
 The FSM continuously asserts `padded_tready_o` to pull in 64-bit message blocks.

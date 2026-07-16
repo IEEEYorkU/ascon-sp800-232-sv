@@ -19,7 +19,7 @@ In keeping with the "Decoupled Data/Control" philosophy of the accelerator, this
 The FSM transitions through highly specific protocol phases, managing a split-control state machine built across 11 architectural states:
 
 #### A. Initialization
-The FSM orchestrates the loading of the 128-bit Key and 128-bit Nonce alongside the AEAD128 Initialization Vector (IV). It triggers the initial 12-round permutation and subsequently XORs the Key into state words `S3` and `S4` to establish the starting cryptographic state.
+The FSM orchestrates the loading of the 128-bit Key and 128-bit Nonce via the `data_o` bus, and asserts `iv_en_o` alongside `iv_sel_o` to load the AEAD128 Initialization Vector (IV) natively within the core. It triggers the initial 12-round permutation and subsequently XORs the Key into state words `S3` and `S4` to establish the starting cryptographic state.
 
 #### B. Associated Data (AD) Processing
 The FSM absorbs variable-length Associated Data blocks. Following the final AD block, it asserts the mandatory Domain Separation bit into the state (XORing a `1` into `S4`) to securely separate the AD phase from the payload phase.

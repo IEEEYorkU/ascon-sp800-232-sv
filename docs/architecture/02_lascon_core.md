@@ -19,6 +19,8 @@ This interface minimizes routing congestion by using a narrow 64-bit data path, 
 | **`round_config_i`** | Input | 1 | **Configuration.** Selects the number of rounds to run: `1` starts the round counter at 0 (runs rounds 0 to 11, total 12 rounds / $p^{12}$), while `0` starts it at 4 (runs rounds 4 to 11, total 8 rounds / $p^8$). |
 | **`write_en_i`** | Input | 1 | **Write Enable.** When high, writes `data_i` into the word selected by `word_sel_i`. |
 | **`word_sel_i`** | Input | 3 | **Address Selector.** Selects which of the five state words (S0:S4) to write to or read from. |
+| **`iv_en_i`** | Input | 1 | **IV Load Enable.** When high, writes the pre-computed IV (selected by `iv_sel_i`) into the core state. |
+| **`iv_sel_i`** | Input | 2 | **IV Selector.** Selects which algorithm's IV to load (AEAD128, HASH256, XOF, CXOF). |
 | **`data_i`** | Input | 64 | **Input Data.** The 64-bit value to be written *directly* into the selected state word, overwriting its current value. Note that the core does not perform internal XORing. |
 | **`data_o`** | Output | 64 | **Output Data.** Continuously outputs the current value of the state word selected by `word_sel_i`. |
 | **`ready_o`** | Output | 1 | **Completion/Idle Status.** High when the Core is in the IDLE state and waiting for commands. Low when a permutation is actively running. |
@@ -29,7 +31,7 @@ This interface minimizes routing congestion by using a narrow 64-bit data path, 
 
 ### 3. Summary of Operation Flow
 The Controller interacts with this core in three distinct "Primitive Operations":
-1. **Load/Overwrite (Initialization):** The Controller sets `word_sel_i` to 0..4, sets `data_i` with the IV, Key, or Nonce, and asserts `write_en_i` to load them sequentially.
+1. **Load/Overwrite (Initialization):** The Controller sets `word_sel_i` to 0..4, sets `data_i` with the Key or Nonce (or asserts `iv_en_i` and `iv_sel_i` to load IVs), and asserts `write_en_i` (or `iv_en_i`) to load them sequentially.
 2. **Permute (Round Function):** The Controller configures the rounds using `round_config_i` (1 for $p^{12}$, 0 for $p^8$) and pulses `start_perm_i`. It then waits for `ready_o` to assert.
 3. **Absorb/Extract (Data Processing):**
    * **Read:** The Controller selects the desired lane via `word_sel_i` and reads the state word from `data_o`.

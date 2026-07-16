@@ -99,6 +99,8 @@ module lascon_top (
     logic           core_start_perm_i;
     logic           core_round_config_i;
     logic   [2:0]   core_word_sel_i;
+    logic           core_iv_en_i;
+    iv_sel_t        core_iv_sel_i;
     ascon_word_t    core_data_i;
     logic           core_write_en_i;
     ascon_word_t    core_data_o;
@@ -111,7 +113,9 @@ module lascon_top (
     logic [2:0]     aead_word_sel, hash_word_sel;
     logic           aead_start_perm, hash_start_perm;
     logic           aead_round_config, hash_round_config;
-    ascon_word_t    aead_data_o, hash_data_o;
+    logic           aead_iv_en, hash_iv_en;
+    iv_sel_t        aead_iv_sel, hash_iv_sel;
+    ascon_word_t    aead_data_o;
     data_sel_t      aead_in_data_sel, hash_in_data_sel;
 
     // --- Padder Interconnect Wires ---
@@ -186,6 +190,8 @@ module lascon_top (
             core_start_perm_i   = aead_start_perm;
             core_round_config_i = aead_round_config;
             core_word_sel_i     = aead_word_sel;
+            core_iv_en_i        = aead_iv_en;
+            core_iv_sel_i       = aead_iv_sel;
             core_write_en_i     = aead_write_en;
             core_in_data_sel    = aead_in_data_sel;
 
@@ -203,6 +209,8 @@ module lascon_top (
             core_start_perm_i   = hash_start_perm;
             core_round_config_i = hash_round_config;
             core_word_sel_i     = hash_word_sel;
+            core_iv_en_i        = hash_iv_en;
+            core_iv_sel_i       = hash_iv_sel;
             core_write_en_i     = hash_write_en;
             core_in_data_sel    = hash_in_data_sel;
 
@@ -237,6 +245,8 @@ module lascon_top (
         .start_perm_o    (aead_start_perm),
         .round_config_o  (aead_round_config),
         .word_sel_o      (aead_word_sel),
+        .iv_en_o         (aead_iv_en),
+        .iv_sel_o        (aead_iv_sel),
         .data_o          (aead_data_o),
         .write_en_o      (aead_write_en),
         .in_data_sel_o   (aead_in_data_sel),
@@ -279,7 +289,8 @@ module lascon_top (
         .start_perm_o           (hash_start_perm),
         .round_config_o         (hash_round_config),
         .word_sel_o             (hash_word_sel),
-        .data_o                 (hash_data_o),       // Used to write the pre-computed Hash IVs into the core
+        .iv_en_o                (hash_iv_en),
+        .iv_sel_o               (hash_iv_sel),
         .write_en_o             (hash_write_en),
         .core_in_data_sel_o     (hash_in_data_sel),
 
@@ -304,6 +315,8 @@ module lascon_top (
         .start_perm_i   (core_start_perm_i),
         .round_config_i (core_round_config_i),
         .word_sel_i     (core_word_sel_i),
+        .iv_en_i        (core_iv_en_i),
+        .iv_sel_i       (core_iv_sel_i),
         .data_i         (core_data_i),
         .write_en_i     (core_write_en_i),
         .data_o         (core_data_o),
@@ -313,11 +326,10 @@ module lascon_top (
     always_comb begin
         case(core_in_data_sel)
             DATA_IN_AEAD_SEL     : core_data_i = aead_data_o;
-            DATA_IN_HASH_SEL     : core_data_i = hash_data_o;
             DATA_IN_AXI_SEL      : core_data_i = padded_tdata;
             DATA_IN_XOR_AXI_SEL  : core_data_i = core_data_o ^ padded_tdata;
             DATA_IN_XOR_AEAD_SEL : core_data_i = core_data_o ^ aead_data_o;
-            DATA_IN_XOR_HASH_SEL : core_data_i = core_data_o ^ hash_data_o;
+            DATA_IN_ZERO_SEL     : core_data_i = 64'd0;
             default              : core_data_i = 64'd0;
         endcase
     end

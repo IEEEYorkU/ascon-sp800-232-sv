@@ -28,7 +28,8 @@ module hash_fsm_tb;
     logic           start_perm_o;
     logic           round_config_o;
     logic [2:0]     word_sel_o;
-    ascon_word_t    data_o;
+    logic           iv_en_o;
+    iv_sel_t        iv_sel_o;
     logic           write_en_o;
     data_sel_t      core_in_data_sel_o;
 
@@ -56,7 +57,8 @@ module hash_fsm_tb;
         .start_perm_o           (start_perm_o),
         .round_config_o         (round_config_o),
         .word_sel_o             (word_sel_o),
-        .data_o                 (data_o),
+        .iv_en_o                (iv_en_o),
+        .iv_sel_o               (iv_sel_o),
         .write_en_o             (write_en_o),
         .core_in_data_sel_o     (core_in_data_sel_o),
         .padded_tuser_i         (padded_tuser_i),
@@ -152,6 +154,13 @@ module hash_fsm_tb;
             // 2. The Handshake Collision Monitor
             if (start_perm_o && !lascon_ready_i) begin
                 $fatal(1, "[HANDSHAKE ERROR] FSM pulsed start_perm_o while core was already busy!");
+            end
+
+            // 3. IV Assertion Check
+            if (iv_en_o) begin
+                if (mode_i == MODE_HASH256 && iv_sel_o != IV_HASH256) $fatal(1, "[IV ERROR] Incorrect IV selected for Hash256");
+                if (mode_i == MODE_XOF && iv_sel_o != IV_XOF) $fatal(1, "[IV ERROR] Incorrect IV selected for XOF");
+                if (mode_i == MODE_CXOF && iv_sel_o != IV_CXOF) $fatal(1, "[IV ERROR] Incorrect IV selected for CXOF");
             end
         end
     end

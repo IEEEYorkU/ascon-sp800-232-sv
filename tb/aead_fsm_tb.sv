@@ -27,6 +27,8 @@ module aead_fsm_tb;
     logic                 start_perm_o;
     logic                 round_config_o;
     logic [2:0]           word_sel_o;
+    logic                 iv_en_o;
+    iv_sel_t              iv_sel_o;
     ascon_word_t          data_o;
     logic                 write_en_o;
     data_sel_t            in_data_sel_o;
@@ -64,6 +66,8 @@ module aead_fsm_tb;
         .start_perm_o    (start_perm_o),
         .round_config_o  (round_config_o),
         .word_sel_o      (word_sel_o),
+        .iv_en_o         (iv_en_o),
+        .iv_sel_o        (iv_sel_o),
         .data_o          (data_o),
         .write_en_o      (write_en_o),
         .in_data_sel_o   (in_data_sel_o),
@@ -98,7 +102,18 @@ module aead_fsm_tb;
     end
 
     // -------------------------------------------------------------------------
-    // 4. Handshake Tasks with Fatal Timeouts
+    // 4. Hardware Monitors
+    // -------------------------------------------------------------------------
+
+    // IV Assertion Check
+    always @(posedge clk) begin
+        if (!rst && iv_en_o) begin
+            if (iv_sel_o != IV_AEAD128) $fatal(1, "[IV ERROR] Incorrect IV selected for AEAD");
+        end
+    end
+
+    // -------------------------------------------------------------------------
+    // 5. Handshake Tasks with Fatal Timeouts
     // -------------------------------------------------------------------------
 
     // Task to wait for a signal condition with a strict timeout
@@ -130,7 +145,7 @@ module aead_fsm_tb;
     endtask
 
     // -------------------------------------------------------------------------
-    // 5. Main Test Procedure
+    // 6. Main Test Procedure
     // -------------------------------------------------------------------------
     initial begin
         $display("Starting AEAD FSM Testbench with Fatal Timeouts...");
