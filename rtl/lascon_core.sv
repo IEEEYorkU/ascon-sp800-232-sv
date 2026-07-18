@@ -71,7 +71,6 @@ module lascon_core #(
     state_t state, next_state;
 
     rnd_t rnd_cnt;
-    logic [6:0] col_cnt;
     ascon_state_t state_array;
 
     // Permutation Layers Output
@@ -87,11 +86,28 @@ module lascon_core #(
         .state_array_o(addition_state_array_o)
     );
 
-    always_comb begin
-        for (int i = 0; i < 5; i++) begin
-            sbox_chunk_in[i] = addition_state_array_o[i][col_cnt * SBOX_WIDTH +: SBOX_WIDTH];
+    generate
+        if (SBOX_WIDTH == 64) begin : gen_comb_64
+            always_comb begin
+                for (int i = 0; i < 5; i++) begin
+                    sbox_chunk_in[i] = addition_state_array_o[i];
+                    diff_input_array[i] = sbox_chunk_out[i];
+                end
+            end
+        end else begin : gen_comb_serial
+            logic [7:0] round_const;
+            assign round_const = {~rnd_cnt, rnd_cnt};
+            always_comb begin
+                for (int i = 0; i < 5; i++) begin
+                    sbox_chunk_in[i] = state_array[i][0 +: SBOX_WIDTH];
+                end
+                if (gen_col_cnt.col_cnt * SBOX_WIDTH < 8) begin
+                    sbox_chunk_in[2] = state_array[2][0 +: SBOX_WIDTH] ^ round_const[gen_col_cnt.col_cnt * SBOX_WIDTH +: SBOX_WIDTH];
+                end
+                diff_input_array = state_array;
+            end
         end
-    end
+    endgenerate
 
     substitution_layer #(
         .SBOX_WIDTH(SBOX_WIDTH)
@@ -99,16 +115,6 @@ module lascon_core #(
         .state_chunk_i(sbox_chunk_in),
         .state_chunk_o(sbox_chunk_out)
     );
-
-    always_comb begin
-        if (SBOX_WIDTH == 64) begin
-            for (int i = 0; i < 5; i++) begin
-                diff_input_array[i] = sbox_chunk_out[i];
-            end
-        end else begin
-            diff_input_array = state_array;
-        end
-    end
 
     linear_diffusion_layer diffusion(
         .state_array_i(diff_input_array),
@@ -120,95 +126,83 @@ module lascon_core #(
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= STATE_IDLE;
-            col_cnt <= '0;
         end else begin
             state <= next_state;
-            
-            // Manage col_cnt
-            if (state == STATE_IDLE && start_perm_i) begin
-                col_cnt <= '0;
-            end else if (state == STATE_PERM && SBOX_WIDTH < 64) begin
-                col_cnt <= col_cnt + 1;
-            end else if (state == STATE_PERM_DIFF) begin
-                col_cnt <= '0;
-            end
         end
     end
 
-    // FSM Control Process 2: Next State Decoder (Combinational)
-    // ----------------------------------------------------------
-    always_comb begin
-        next_state = state;
-
-        case(state)
-            STATE_IDLE: begin
-                if (start_perm_i) begin
-                    next_state = STATE_PERM;
-                end else begin
-                    next_state = STATE_IDLE;
-                end
+    generate
+        if (SBOX_WIDTH == 64) begin : gen_fsm_64
+            // Next State Logic
+            always_comb begin
+                next_state = state;
+                case(state)
+                    STATE_IDLE:      if (start_perm_i) next_state = STATE_PERM;
+                    STATE_PERM:      if (rnd_cnt >= 4'd11) next_state = STATE_IDLE;
+                    STATE_PERM_DIFF: next_state = STATE_IDLE; // Should not reach
+                    default:         next_state = STATE_IDLE;
+                endcase
             end
 
-            STATE_PERM: begin
-                if (SBOX_WIDTH == 64) begin
-                    if (rnd_cnt < 4'd11) begin
-                        next_state = STATE_PERM;
-                    end else begin
-                        next_state = STATE_IDLE;
+            // Action Logic
+            always_ff @(posedge clk) begin
+                case (state)
+                    STATE_IDLE: begin
+                        if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
+                        if (write_en_i) state_array[word_sel_i] <= data_i;
                     end
-                end else begin
-                    if (col_cnt == SBOX_CYCLES - 1) begin
-                        next_state = STATE_PERM_DIFF;
-                    end else begin
-                        next_state = STATE_PERM;
+                    STATE_PERM: begin
+                        state_array <= diffusion_state_array_o;
+                        if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
                     end
+                endcase
+            end
+
+        end else begin : gen_col_cnt
+            logic [6:0] col_cnt;
+
+            always_ff @(posedge clk or posedge rst) begin
+                if (rst) col_cnt <= '0;
+                else begin
+                    if (state == STATE_IDLE && start_perm_i) col_cnt <= '0;
+                    else if (state == STATE_PERM) col_cnt <= col_cnt + 1;
+                    else if (state == STATE_PERM_DIFF) col_cnt <= '0;
                 end
             end
 
-            STATE_PERM_DIFF: begin
-                if (rnd_cnt < 4'd11) begin
-                    next_state = STATE_PERM;
-                end else begin
-                    next_state = STATE_IDLE;
-                end
+            // Next State Logic
+            always_comb begin
+                next_state = state;
+                case(state)
+                    STATE_IDLE:      if (start_perm_i) next_state = STATE_PERM;
+                    STATE_PERM:      if (col_cnt == SBOX_CYCLES - 1) next_state = STATE_PERM_DIFF;
+                    STATE_PERM_DIFF: if (rnd_cnt >= 4'd11) next_state = STATE_IDLE; else next_state = STATE_PERM;
+                    default:         next_state = STATE_IDLE;
+                endcase
             end
 
-            default: begin
-                next_state = STATE_IDLE;
+            // Action Logic
+            always_ff @(posedge clk) begin
+                case (state)
+                    STATE_IDLE: begin
+                        if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
+                        if (write_en_i) state_array[word_sel_i] <= data_i;
+                    end
+                    STATE_PERM: begin
+                        for (int i = 0; i < 5; i++) begin
+                            state_array[i] <= {sbox_chunk_out[i], state_array[i][63 : SBOX_WIDTH]};
+                        end
+                    end
+                    STATE_PERM_DIFF: begin
+                        state_array <= diffusion_state_array_o;
+                        if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
+                    end
+                endcase
             end
-        endcase
-    end
+        end
+    endgenerate
 
-    // FSM Control Process 3: Action Decoder (Combinational)
-    // ----------------------------------------------------------
     assign ready_o = (state == STATE_IDLE);
-
-    // FSM Control Process 4: Action Logic (Sequential)
-    // ----------------------------------------------------------
-    always_ff @(posedge clk) begin
-        unique case (state)
-            STATE_IDLE: begin
-                if (start_perm_i) rnd_cnt <= round_config_i ? 4'd0 : 4'd4;
-                if (write_en_i) state_array[word_sel_i] <= data_i;
-            end
-
-            STATE_PERM: begin
-                if (SBOX_WIDTH == 64) begin
-                    state_array <= diffusion_state_array_o;
-                    if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
-                end else begin
-                    for (int i = 0; i < 5; i++) begin
-                        state_array[i][col_cnt * SBOX_WIDTH +: SBOX_WIDTH] <= sbox_chunk_out[i];
-                    end
-                end
-            end
-
-            STATE_PERM_DIFF: begin
-                state_array <= diffusion_state_array_o;
-                if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
-            end
-        endcase
-    end
 
     // Combinational Output Data
     assign data_o = state_array[word_sel_i];
