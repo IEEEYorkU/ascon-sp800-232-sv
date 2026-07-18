@@ -10,9 +10,11 @@
 
 import lascon_pkg::*;
 
-module substitution_layer (
-    input   ascon_state_t   state_array_i,
-    output  ascon_state_t   state_array_o
+module substitution_layer #(
+    parameter int SBOX_WIDTH = 64
+)(
+    input   logic [4:0][SBOX_WIDTH-1:0] state_chunk_i,
+    output  logic [4:0][SBOX_WIDTH-1:0] state_chunk_o
 );
 
     // ----------------------------------------------------------------------
@@ -20,18 +22,17 @@ module substitution_layer (
     // ----------------------------------------------------------------------
     // Implements Ascon S-box using Boolean equations from NIST SP 800-232 Section 3.3.
     // This utilizes logical gates directly instead of relying on LUT inference.
-    genvar j;
     generate
-        for (j = 0; j < WORD_WIDTH; j++) begin : gen_sbox_loop
+        for (genvar j = 0; j < SBOX_WIDTH; j++) begin : gen_sbox_loop
             logic x0, x1, x2, x3, x4;
             logic t0, t1, t2, t3, t4;
             logic y0, y1, y2, y3, y4;
 
-            assign x0 = state_array_i[0][j] ^ state_array_i[4][j];
-            assign x1 = state_array_i[1][j];
-            assign x2 = state_array_i[2][j] ^ state_array_i[1][j];
-            assign x3 = state_array_i[3][j];
-            assign x4 = state_array_i[4][j] ^ state_array_i[3][j];
+            assign x0 = state_chunk_i[0][j] ^ state_chunk_i[4][j];
+            assign x1 = state_chunk_i[1][j];
+            assign x2 = state_chunk_i[2][j] ^ state_chunk_i[1][j];
+            assign x3 = state_chunk_i[3][j];
+            assign x4 = state_chunk_i[4][j] ^ state_chunk_i[3][j];
 
             assign t0 = ~x0;
             assign t1 = ~x1;
@@ -45,11 +46,11 @@ module substitution_layer (
             assign y3 = x3 ^ (t4 & x0);
             assign y4 = x4 ^ (t0 & x1);
 
-            assign state_array_o[0][j] = y0 ^ y4;
-            assign state_array_o[1][j] = y1 ^ y0;
-            assign state_array_o[2][j] = ~y2;
-            assign state_array_o[3][j] = y3 ^ y2;
-            assign state_array_o[4][j] = y4;
+            assign state_chunk_o[0][j] = y0 ^ y4;
+            assign state_chunk_o[1][j] = y1 ^ y0;
+            assign state_chunk_o[2][j] = ~y2;
+            assign state_chunk_o[3][j] = y3 ^ y2;
+            assign state_chunk_o[4][j] = y4;
         end
     endgenerate
 

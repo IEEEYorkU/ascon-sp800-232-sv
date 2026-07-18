@@ -8,17 +8,28 @@
 `timescale 1ns/1ps
 import lascon_pkg::*;
 
-module substitution_layer_tb;
+module substitution_layer_tb #(
+    parameter int LASCON_VARIANT = 0
+);
+
+localparam int SBOX_WIDTH = (LASCON_VARIANT == 1) ? 1 : 64;
+localparam int SBOX_CYCLES = 64 / SBOX_WIDTH;
 
 // Inputs and Registers DUT
-ascon_state_t state_array_i;
-ascon_state_t state_array_o;
+logic [4:0][SBOX_WIDTH-1:0] state_chunk_i;
+logic [4:0][SBOX_WIDTH-1:0] state_chunk_o;
 
 //Instantiate DUT from substitution_layer:
-substitution_layer dut (
-    .state_array_i(state_array_i),
-    .state_array_o(state_array_o)
+substitution_layer #(
+    .SBOX_WIDTH(SBOX_WIDTH)
+) dut (
+    .state_chunk_i(state_chunk_i),
+    .state_chunk_o(state_chunk_o)
 );
+
+// We still need full state representation for testing
+ascon_state_t state_array_i;
+ascon_state_t state_array_o;
 
 /*
 -------------------------------------------------------------------------
@@ -123,7 +134,19 @@ endtask
       state_array_i[3][0] = x[1];
       state_array_i[4][0] = x[0];
 
-      #1;
+      // Pass to DUT
+      if (SBOX_WIDTH == 64) begin
+          for (int i=0; i<5; i++) state_chunk_i[i] = state_array_i[i];
+          #1;
+          for (int i=0; i<5; i++) state_array_o[i] = state_chunk_o[i];
+      end else begin
+          for (int c=0; c<SBOX_CYCLES; c++) begin
+              for (int i=0; i<5; i++) state_chunk_i[i] = state_array_i[i][c * SBOX_WIDTH +: SBOX_WIDTH];
+              #1;
+              for (int i=0; i<5; i++) state_array_o[i][c * SBOX_WIDTH +: SBOX_WIDTH] = state_chunk_o[i];
+          end
+      end
+
       compute_expected(state_array_i, exp);
 
       if (state_array_o !== exp) fail_mismatch(test_id, exp);
@@ -144,7 +167,19 @@ endtask
       state_array_i[3] = rand_word();
       state_array_i[4] = rand_word();
 
-      #1;
+      // Pass to DUT
+      if (SBOX_WIDTH == 64) begin
+          for (int i=0; i<5; i++) state_chunk_i[i] = state_array_i[i];
+          #1;
+          for (int i=0; i<5; i++) state_array_o[i] = state_chunk_o[i];
+      end else begin
+          for (int c=0; c<SBOX_CYCLES; c++) begin
+              for (int i=0; i<5; i++) state_chunk_i[i] = state_array_i[i][c * SBOX_WIDTH +: SBOX_WIDTH];
+              #1;
+              for (int i=0; i<5; i++) state_array_o[i][c * SBOX_WIDTH +: SBOX_WIDTH] = state_chunk_o[i];
+          end
+      end
+
       compute_expected(state_array_i, exp);
 
     //Just to see the values for the first few tests

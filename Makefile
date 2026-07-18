@@ -1,6 +1,8 @@
 # =========================================================
 # Local Project Variables & Vector Generation
 # =========================================================
+VARIANTS ?= 0 1
+SYNTH_MODULES ?= lascon_top lascon_top_tt
 .DEFAULT_GOAL := all
 
 PYTHON      ?= python3

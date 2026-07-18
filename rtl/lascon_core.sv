@@ -59,18 +59,26 @@ module lascon_core #(
     output  logic           ready_o
 );
 
+    localparam int SBOX_WIDTH = (LASCON_VARIANT == 1) ? 1 : 64;
+    localparam int SBOX_CYCLES = 64 / SBOX_WIDTH;
+
     // FSM States
-    typedef enum logic [0:0] {
+    typedef enum logic [1:0] {
         STATE_IDLE,
-        STATE_PERM
+        STATE_PERM,
+        STATE_PERM_DIFF
     } state_t;
     state_t state, next_state;
 
     rnd_t rnd_cnt;
+    logic [6:0] col_cnt;
     ascon_state_t state_array;
 
     // Permutation Layers Output
-    ascon_state_t addition_state_array_o, substitution_state_array_o, diffusion_state_array_o;
+    ascon_state_t addition_state_array_o, diffusion_state_array_o;
+    logic [4:0][SBOX_WIDTH-1:0] sbox_chunk_in;
+    logic [4:0][SBOX_WIDTH-1:0] sbox_chunk_out;
+    ascon_state_t diff_input_array;
 
     // Permutation Layers Instances
     constant_addition_layer const_add(
@@ -78,12 +86,32 @@ module lascon_core #(
         .state_array_i(state_array),
         .state_array_o(addition_state_array_o)
     );
-    substitution_layer substitution(
-        .state_array_i(addition_state_array_o),
-        .state_array_o(substitution_state_array_o)
+
+    always_comb begin
+        for (int i = 0; i < 5; i++) begin
+            sbox_chunk_in[i] = addition_state_array_o[i][col_cnt * SBOX_WIDTH +: SBOX_WIDTH];
+        end
+    end
+
+    substitution_layer #(
+        .SBOX_WIDTH(SBOX_WIDTH)
+    ) substitution (
+        .state_chunk_i(sbox_chunk_in),
+        .state_chunk_o(sbox_chunk_out)
     );
+
+    always_comb begin
+        if (SBOX_WIDTH == 64) begin
+            for (int i = 0; i < 5; i++) begin
+                diff_input_array[i] = sbox_chunk_out[i];
+            end
+        end else begin
+            diff_input_array = state_array;
+        end
+    end
+
     linear_diffusion_layer diffusion(
-        .state_array_i(substitution_state_array_o),
+        .state_array_i(diff_input_array),
         .state_array_o(diffusion_state_array_o)
     );
 
@@ -92,8 +120,18 @@ module lascon_core #(
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state <= STATE_IDLE;
+            col_cnt <= '0;
         end else begin
             state <= next_state;
+            
+            // Manage col_cnt
+            if (state == STATE_IDLE && start_perm_i) begin
+                col_cnt <= '0;
+            end else if (state == STATE_PERM && SBOX_WIDTH < 64) begin
+                col_cnt <= col_cnt + 1;
+            end else if (state == STATE_PERM_DIFF) begin
+                col_cnt <= '0;
+            end
         end
     end
 
@@ -112,6 +150,22 @@ module lascon_core #(
             end
 
             STATE_PERM: begin
+                if (SBOX_WIDTH == 64) begin
+                    if (rnd_cnt < 4'd11) begin
+                        next_state = STATE_PERM;
+                    end else begin
+                        next_state = STATE_IDLE;
+                    end
+                end else begin
+                    if (col_cnt == SBOX_CYCLES - 1) begin
+                        next_state = STATE_PERM_DIFF;
+                    end else begin
+                        next_state = STATE_PERM;
+                    end
+                end
+            end
+
+            STATE_PERM_DIFF: begin
                 if (rnd_cnt < 4'd11) begin
                     next_state = STATE_PERM;
                 end else begin
@@ -139,6 +193,17 @@ module lascon_core #(
             end
 
             STATE_PERM: begin
+                if (SBOX_WIDTH == 64) begin
+                    state_array <= diffusion_state_array_o;
+                    if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
+                end else begin
+                    for (int i = 0; i < 5; i++) begin
+                        state_array[i][col_cnt * SBOX_WIDTH +: SBOX_WIDTH] <= sbox_chunk_out[i];
+                    end
+                end
+            end
+
+            STATE_PERM_DIFF: begin
                 state_array <= diffusion_state_array_o;
                 if (rnd_cnt < 4'd11) rnd_cnt <= rnd_cnt + 4'd1;
             end

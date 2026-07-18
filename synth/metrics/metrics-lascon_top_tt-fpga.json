@@ -1,7 +1,7 @@
 {
-    "fpga_luts": "2323",
+    "fpga_luts": "2823",
     "fpga_brams": "0",
     "fpga_dsps": "0",
-    "fpga_registers": "533",
+    "fpga_registers": "541",
     "ltp": "9"
 }

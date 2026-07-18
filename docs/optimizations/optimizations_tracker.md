@@ -63,12 +63,12 @@ To propose or track a new optimization, copy the markdown block below, append it
 ### OPT-1: Serialize the S-box (Substitution Layer)
 
 #### Status
-- [x] **Pending**
-- [ ] **In-Progress**
+- [ ] **Pending**
+- [x] **In-Progress**
 - [ ] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-18*
 
 #### Description
 Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances in `substitution_layer`) with a smaller number of S-box instances that process a subset of bit-columns per clock cycle. The middle-ground approach targets ~8 S-box instances processing 8 columns/cycle, yielding ~8× area reduction in the S-box with 8 cycles per substitution step.
@@ -79,10 +79,10 @@ Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances
 - **Area:** ~8× reduction in substitution layer area (largest combinational block). Very high impact.
 
 #### Required Changes
-- [ ] `substitution_layer`: Replace 64-wide `generate` loop with parameterized width (e.g., 8) and add bit-column counter
-- [ ] `lascon_core`: Add new sub-state for multi-cycle S-box processing; modify round FSM to wait for S-box completion
-- [ ] `substitution_layer_tb`: Update to validate multi-cycle operation
-- [ ] `lascon_core_tb`: Update cycle-count expectations
+- [x] `substitution_layer`: Replace 64-wide `generate` loop with parameterized width (`SBOX_WIDTH`)
+- [x] `lascon_core`: Add new sub-state for multi-cycle S-box processing; modify round FSM to wait for S-box completion based on `SBOX_WIDTH`
+- [x] `substitution_layer_tb`: Update to validate multi-cycle operation
+- [x] `lascon_core_tb`: Update cycle-count expectations using dynamic parameterized loops
 
 #### Difficulty
 - **Execution Difficulty:** Medium
@@ -90,6 +90,7 @@ Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances
 
 #### Notes & Decisions
 - **2026-07-07**: Proposed. Identified as the single largest area optimization opportunity. The middle-ground option (8-wide) offers a good area/performance balance. Under consideration.
+- **2026-07-18**: In Progress. Decided to implement a highly parameterized approach using `SBOX_WIDTH`. For `LASCON_VARIANT = 1` (Tiny Tapeout), we aggressively set `SBOX_WIDTH = 1` to target absolute minimum area. Throughput will drop severely (65-cycle permutation rounds), but this is acceptable for the highly constrained tapeout variant. Future variants can easily tune `SBOX_WIDTH` for a more balanced PPA.
 
 ---
 
