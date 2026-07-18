@@ -12,12 +12,12 @@ permissions:
 
 jobs:
   call-central-builder:
-    uses: IEEEYorkU/lascon-build-tools/.github/workflows/central-builder.yml@feature/ci-synth-integration
+    uses: IEEEYorkU/lascon-build-tools/.github/workflows/central-builder.yml@feature/yosys-synth-metrics
     with:
       # Automatically targets the repository and specific commit of the PR
       rtl_repo: ${{ github.repository }}
       commit_sha: ${{ github.sha }}
-      build_tools_ref: 'feature/ci-synth-integration'
+      build_tools_ref: 'feature/yosys-synth-metrics'
 
       # Your comma-separated top modules for the Yosys synthesis matrix
       top_modules: 'lascon_top'
