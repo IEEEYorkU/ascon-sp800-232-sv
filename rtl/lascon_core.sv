@@ -87,6 +87,9 @@ module lascon_core #(
     );
 
     generate
+        // ====================================================================
+        // Variant 0: 64-Wide Parallel S-Box Datapath
+        // ====================================================================
         if (SBOX_WIDTH == 64) begin : gen_comb_64
             always_comb begin
                 for (int i = 0; i < 5; i++) begin
@@ -94,6 +97,10 @@ module lascon_core #(
                     diff_input_array[i] = sbox_chunk_out[i];
                 end
             end
+        // ====================================================================
+        // Variant 1: Area-Optimized Serial S-Box Datapath
+        // Eliminates multiplexers by treating state_array as a shift register.
+        // ====================================================================
         end else begin : gen_comb_serial
             logic [7:0] round_const;
             assign round_const = {~rnd_cnt, rnd_cnt};
@@ -101,6 +108,9 @@ module lascon_core #(
                 for (int i = 0; i < 5; i++) begin
                     sbox_chunk_in[i] = state_array[i][0 +: SBOX_WIDTH];
                 end
+
+                // Inline the constant addition. Since state_array is shifting right,
+                // we apply the XOR sequentially to the bits as they arrive at index 0.
                 if (gen_col_cnt.col_cnt * SBOX_WIDTH < 8) begin
                     sbox_chunk_in[2] = state_array[2][0 +: SBOX_WIDTH] ^ round_const[gen_col_cnt.col_cnt * SBOX_WIDTH +: SBOX_WIDTH];
                 end
@@ -132,6 +142,10 @@ module lascon_core #(
     end
 
     generate
+        // ====================================================================
+        // Variant 0: 64-Wide Parallel FSM & Action Logic
+        // Completes 1 full round per cycle. Does not instantiate col_cnt.
+        // ====================================================================
         if (SBOX_WIDTH == 64) begin : gen_fsm_64
             // Next State Logic
             always_comb begin
@@ -158,6 +172,10 @@ module lascon_core #(
                 endcase
             end
 
+        // ====================================================================
+        // Variant 1: Area-Optimized Serial FSM & Action Logic
+        // Completes 1 full round in 65 cycles. Uses col_cnt to track shifts.
+        // ====================================================================
         end else begin : gen_col_cnt
             logic [6:0] col_cnt;
 
@@ -189,6 +207,7 @@ module lascon_core #(
                         if (write_en_i) state_array[word_sel_i] <= data_i;
                     end
                     STATE_PERM: begin
+                        // Shift Register Logic: Eliminates 64-to-1 output Demux overhead.
                         for (int i = 0; i < 5; i++) begin
                             state_array[i] <= {sbox_chunk_out[i], state_array[i][63 : SBOX_WIDTH]};
                         end
