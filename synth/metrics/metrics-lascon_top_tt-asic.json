@@ -1,9 +1,9 @@
 {
-    "asic_ge": "13,342.0",
-    "asic_cells": "11156",
+    "asic_ge": "11,446.0",
+    "asic_cells": "9252",
     "asic_ffs": "541",
-    "sky130_area_um2": "31108.59",
-    "sky130_gates": "5394",
-    "sky130_delay_ps": "3500.82",
-    "sky130_fmax_mhz": "285.6"
+    "sky130_area_um2": "25400.61",
+    "sky130_gates": "4430",
+    "sky130_delay_ps": "3576.08",
+    "sky130_fmax_mhz": "279.6"
 }
