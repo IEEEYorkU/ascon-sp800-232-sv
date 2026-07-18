@@ -40,3 +40,5 @@ librelane/
 
 build.f
 *.pyc
+
+metrics.ys
