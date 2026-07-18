@@ -1,3 +1,10 @@
+/*
+ * Module Name: lascon_top_tt
+ * Author(s): Kiet Le
+ * Description:
+ * Tiny Tapeout variant wrapper for the Lascon Cryptographic Hardware Accelerator.
+ *
+ */
 `timescale 1ns / 1ps
 
 import lascon_pkg::*;

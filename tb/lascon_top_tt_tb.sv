@@ -2,7 +2,8 @@
  * Module Name: lascon_top_tt_tb
  * Author(s):   Kiet Le
  * Description:
- * End-to-end integration testbench for the Lascon Hardware Accelerator.
+ * End-to-end integration testbench for the Tiny Tapeout variant of the
+ * Lascon Hardware Accelerator.
  * Dynamically compares the RTL output against the `permutations_sim_pkg`
  * software reference model and strictly asserts AXI4-Stream protocols.
  * ============================================================================= */
