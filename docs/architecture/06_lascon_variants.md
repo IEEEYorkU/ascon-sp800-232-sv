@@ -45,6 +45,6 @@ As the project grows, you may need to implement new architectural strategies (e.
 ### Variant 1: Tiny Tapeout / Area-Optimized (`LASCON_VARIANT = 1`)
 - **Top-Level Wrapper:** `lascon_top_tt.sv`
 - **Description:** A heavily area-optimized implementation tailored for the Tiny Tapeout project or extremely resource-constrained environments.
-- **Characteristics:** Achieves a significantly smaller silicon footprint, trading off clock cycles or throughput to save logical gates.
+- **Characteristics:** Achieves a significantly smaller silicon footprint by deeply serializing the datapath. Specifically, it uses a 1-wide serialized S-box (`SBOX_WIDTH = 1`) which takes 64 clock cycles to complete the substitution layer. This trades off massive amounts of throughput for the absolute minimum logical gate count.
 
 ---

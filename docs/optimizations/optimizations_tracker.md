@@ -10,7 +10,7 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 | :--- | :---: |
 | 🟢 **Completed** | 8 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 6 |
+| 🔵 **Pending** | 8 |
 | 🔴 **Denied** | 4 |
 
 ---
@@ -63,12 +63,12 @@ To propose or track a new optimization, copy the markdown block below, append it
 ### OPT-1: Serialize the S-box (Substitution Layer)
 
 #### Status
-- [x] **Pending**
-- [ ] **In-Progress**
+- [ ] **Pending**
+- [x] **In-Progress**
 - [ ] **Completed**
 - [ ] **Denied**
 
-*Last Updated: 2026-07-07*
+*Last Updated: 2026-07-18*
 
 #### Description
 Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances in `substitution_layer`) with a smaller number of S-box instances that process a subset of bit-columns per clock cycle. The middle-ground approach targets ~8 S-box instances processing 8 columns/cycle, yielding ~8× area reduction in the S-box with 8 cycles per substitution step.
@@ -79,10 +79,10 @@ Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances
 - **Area:** ~8× reduction in substitution layer area (largest combinational block). Very high impact.
 
 #### Required Changes
-- [ ] `substitution_layer`: Replace 64-wide `generate` loop with parameterized width (e.g., 8) and add bit-column counter
-- [ ] `lascon_core`: Add new sub-state for multi-cycle S-box processing; modify round FSM to wait for S-box completion
-- [ ] `substitution_layer_tb`: Update to validate multi-cycle operation
-- [ ] `lascon_core_tb`: Update cycle-count expectations
+- [x] `substitution_layer`: Replace 64-wide `generate` loop with parameterized width (`SBOX_WIDTH`)
+- [x] `lascon_core`: Add new sub-state for multi-cycle S-box processing; modify round FSM to wait for S-box completion based on `SBOX_WIDTH`
+- [x] `substitution_layer_tb`: Update to validate multi-cycle operation
+- [x] `lascon_core_tb`: Update cycle-count expectations using dynamic parameterized loops
 
 #### Difficulty
 - **Execution Difficulty:** Medium
@@ -90,6 +90,7 @@ Replace the 64-wide parallel S-box (`generate` loop of 64 × 5→5 LUT instances
 
 #### Notes & Decisions
 - **2026-07-07**: Proposed. Identified as the single largest area optimization opportunity. The middle-ground option (8-wide) offers a good area/performance balance. Under consideration.
+- **2026-07-18**: In Progress. Decided to implement a highly parameterized approach using `SBOX_WIDTH`. For `LASCON_VARIANT = 1` (Tiny Tapeout), we aggressively set `SBOX_WIDTH = 1` to target absolute minimum area. Throughput will drop severely (65-cycle permutation rounds), but this is acceptable for the highly constrained tapeout variant. Future variants can easily tune `SBOX_WIDTH` for a more balanced PPA.
 
 ---
 
@@ -453,12 +454,12 @@ Remove explicit sequential state value assignments (e.g., `= 4'd0, 4'd1...`) fro
 ### OPT-13: Serialize Linear Diffusion (Datapath)
 
 #### Status
-- [x] **Pending**
+- [ ] **Pending**
 - [ ] **In-Progress**
 - [ ] **Completed**
-- [ ] **Denied**
+- [x] **Denied**
 
-*Last Updated: 2026-07-08*
+*Last Updated: 2026-07-18*
 
 #### Description
 Instead of computing all five 64-bit word rotations concurrently in `linear_diffusion_layer.sv`, instantiate a single 64-bit diffusion block and process the state sequentially over 5 clock cycles.
@@ -478,6 +479,7 @@ Instead of computing all five 64-bit word rotations concurrently in `linear_diff
 
 #### Notes & Decisions
 - **2026-07-08**: Identified as an area optimization strategy. Marked as pending.
+- **2026-07-18**: Denied. Detailed analysis showed that serializing Ascon's diffusion layer (which has unique rotation offsets per word) requires either dynamic barrel shifters and multiplexers (> 2,500 GE) or a shadow register (> 1,600 GE), making it less area-efficient than the parallel XOR version (~1,600 GE).
 
 ---
 
@@ -637,3 +639,64 @@ In `hash_fsm.sv`, the squeeze termination condition compares a 32-bit up-counter
 
 #### Notes & Decisions
 - **2026-07-08**: Proposed as an easy area reduction. Marked as pending.
+
+---
+
+### OPT-19: Unified Protocol FSM (Merge AEAD and Hash)
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-18*
+
+#### Description
+Merge `aead_fsm.sv` and `hash_fsm.sv` into a single, unified `lascon_fsm.sv`. This eliminates the massive 64-bit arbitration multiplexers in `lascon_top.sv` that are currently used to route AXI4-Stream data and core control signals between the two separate FSMs.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Neutral (No change to protocol latency).
+- **Power:** May slightly reduce power by eliminating toggle activity in unused FSM branches and MUX trees.
+- **Area:** High reduction in area (~500 - 1000 GE) by sharing AXI master logic and eliminating top-level 64-bit multiplexing.
+
+#### Required Changes
+- [ ] `aead_fsm`, `hash_fsm`: Combine states and datapath logic into a single FSM.
+- [ ] `lascon_top`: Remove arbitration multiplexers.
+
+#### Difficulty
+- **Execution Difficulty:** High
+- **Justification/Risks:** Requires carefully combining two complex protocols without breaking AXI handshaking or domain separation rules.
+
+#### Notes & Decisions
+- **2026-07-18**: Identified as an area optimization strategy targeting combinational MUX overhead in the control path. Marked as pending.
+
+---
+
+### OPT-20: Optimize Padder TKEEP Multiplexing
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-18*
+
+#### Description
+Rewrite the `apply_padding()` function in `lascon_padder.sv` to use bitwise masking operations instead of explicit 64-bit concatenations inside a `case` statement, preventing the synthesis tool from inferring an expensive 8-to-1 64-bit multiplexer.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Neutral.
+- **Power:** Neutral.
+- **Area:** Medium reduction (~300 - 800 GE) by mapping to standard AND/OR gates instead of MUX cells.
+
+#### Required Changes
+- [ ] `lascon_padder`: Refactor `apply_padding` to use dynamic masking/shifts.
+
+#### Difficulty
+- **Execution Difficulty:** Low
+- **Justification/Risks:** Low risk. Transparent to downstream FSMs.
+
+#### Notes & Decisions
+- **2026-07-18**: Identified as a structural combinational area optimization. Marked as pending.
