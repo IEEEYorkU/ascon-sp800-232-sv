@@ -10,7 +10,7 @@ This document tracks potential hardware optimization proposals for the LASCON ha
 | :--- | :---: |
 | 🟢 **Completed** | 8 |
 | 🟡 **In-Progress** | 0 |
-| 🔵 **Pending** | 6 |
+| 🔵 **Pending** | 8 |
 | 🔴 **Denied** | 4 |
 
 ---
@@ -639,3 +639,64 @@ In `hash_fsm.sv`, the squeeze termination condition compares a 32-bit up-counter
 
 #### Notes & Decisions
 - **2026-07-08**: Proposed as an easy area reduction. Marked as pending.
+
+---
+
+### OPT-19: Unified Protocol FSM (Merge AEAD and Hash)
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-18*
+
+#### Description
+Merge `aead_fsm.sv` and `hash_fsm.sv` into a single, unified `lascon_fsm.sv`. This eliminates the massive 64-bit arbitration multiplexers in `lascon_top.sv` that are currently used to route AXI4-Stream data and core control signals between the two separate FSMs.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Neutral (No change to protocol latency).
+- **Power:** May slightly reduce power by eliminating toggle activity in unused FSM branches and MUX trees.
+- **Area:** High reduction in area (~500 - 1000 GE) by sharing AXI master logic and eliminating top-level 64-bit multiplexing.
+
+#### Required Changes
+- [ ] `aead_fsm`, `hash_fsm`: Combine states and datapath logic into a single FSM.
+- [ ] `lascon_top`: Remove arbitration multiplexers.
+
+#### Difficulty
+- **Execution Difficulty:** High
+- **Justification/Risks:** Requires carefully combining two complex protocols without breaking AXI handshaking or domain separation rules.
+
+#### Notes & Decisions
+- **2026-07-18**: Identified as an area optimization strategy targeting combinational MUX overhead in the control path. Marked as pending.
+
+---
+
+### OPT-20: Optimize Padder TKEEP Multiplexing
+
+#### Status
+- [x] **Pending**
+- [ ] **In-Progress**
+- [ ] **Completed**
+- [ ] **Denied**
+
+*Last Updated: 2026-07-18*
+
+#### Description
+Rewrite the `apply_padding()` function in `lascon_padder.sv` to use bitwise masking operations instead of explicit 64-bit concatenations inside a `case` statement, preventing the synthesis tool from inferring an expensive 8-to-1 64-bit multiplexer.
+
+#### PPA (Performance, Power, Area) Impact
+- **Performance:** Neutral.
+- **Power:** Neutral.
+- **Area:** Medium reduction (~300 - 800 GE) by mapping to standard AND/OR gates instead of MUX cells.
+
+#### Required Changes
+- [ ] `lascon_padder`: Refactor `apply_padding` to use dynamic masking/shifts.
+
+#### Difficulty
+- **Execution Difficulty:** Low
+- **Justification/Risks:** Low risk. Transparent to downstream FSMs.
+
+#### Notes & Decisions
+- **2026-07-18**: Identified as a structural combinational area optimization. Marked as pending.
